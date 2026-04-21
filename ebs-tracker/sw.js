@@ -1,4 +1,4 @@
-const CACHE = 'ebs-tracker-v4';
+const CACHE = 'ebs-tracker-v5';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -13,7 +13,11 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network first — always serve latest version, cache as fallback
+  // Only cache same-origin GET requests — POST and cross-origin requests
+  // (e.g. Supabase API calls) must never be intercepted or cached.
+  if (e.request.method !== 'GET') return;
+  if (!e.request.url.startsWith(self.location.origin)) return;
+
   e.respondWith(
     fetch(e.request)
       .then(response => {
