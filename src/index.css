@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { 
+  height: -webkit-fill-available;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: #f8f9fc;
+  color: #1a202c;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  /* Safe areas for notch phones */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#root { min-height: 100vh; min-height: -webkit-fill-available; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d7e5; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9aa5bd; }
+
+/* Gantt */
+.gantt-bar { transition: all 0.3s ease; }
+.gantt-bar:hover { filter: brightness(1.1); transform: scaleY(1.15); }
+
+/* Animations */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+
+.animate-fade-in { animation: fadeIn 0.35s ease-out both; }
+.animate-slide-in { animation: slideIn 0.3s ease-out both; }
+
+/* Stagger */
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 50ms; }
+.stagger > *:nth-child(3) { animation-delay: 100ms; }
+.stagger > *:nth-child(4) { animation-delay: 150ms; }
+.stagger > *:nth-child(5) { animation-delay: 200ms; }
+.stagger > *:nth-child(6) { animation-delay: 250ms; }
+
+/* Modal backdrop */
+.modal-backdrop {
+  background: rgba(15, 19, 32, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+/* Table row hover */
+tr.project-row { transition: background 0.15s; cursor: pointer; }
+tr.project-row:hover { background: #f0f4ff !important; }
+
+/* Custom select */
+select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7a99' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.5rem center; padding-right: 1.5rem; }
+
+/* ─── Mobile Bottom Nav ─── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: #0f1320;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+}
+.bottom-nav a, .bottom-nav button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b7a99;
+  background: none;
+  border: none;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.bottom-nav a.active, .bottom-nav button.active { color: #748ffc; }
+
+/* ─── Mobile Modals — full screen ─── */
+@media (max-width: 640px) {
+  .modal-backdrop {
+    align-items: flex-end !important;
+    padding-top: 0 !important;
+  }
+  .modal-backdrop > div {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 1.25rem 1.25rem 0 0 !important;
+    max-height: 92vh !important;
+  }
+}
+
+/* ─── Mobile Cards for tables ─── */
+@media (max-width: 768px) {
+  .mobile-card-view table { display: none; }
+  .desktop-table-view { display: none; }
+}
+@media (min-width: 769px) {
+  .mobile-card-view .mobile-cards { display: none; }
+}
+
+/* ─── Touch targets ─── */
+@media (max-width: 768px) {
+  button, a, select, input { min-height: 44px; }
+  .badge-touch { min-height: auto; }
+}
+
+/* ─── PWA standalone adjustments ─── */
+@media (display-mode: standalone) {
+  body { padding-top: env(safe-area-inset-top); }
+}
+
+/* ─── Prevent rubber-band bounce on iOS ─── */
+@supports (-webkit-touch-callout: none) {
+  body { overscroll-behavior: none; }
+}
