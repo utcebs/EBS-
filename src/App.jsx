@@ -1573,8 +1573,8 @@ function LoginPage() {
       <div className="bg-white rounded-2xl border border-surface-200 shadow-sm p-6">
         <form onSubmit={handleLogin} className="space-y-4">
           {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">{error}</div>}
-          <FormField label="Email"><input className={inputCls} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@company.com" required /></FormField>
-          <FormField label="Password"><input className={inputCls} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></FormField>
+          <FormField label="Email"><input id="login-email" name="email" className={inputCls} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@company.com" autoComplete="email" required /></FormField>
+          <FormField label="Password"><input id="login-password" name="password" className={inputCls} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" required /></FormField>
           <button type="submit" disabled={loading} className="w-full py-2.5 bg-brand-600 text-white rounded-xl font-medium text-sm hover:bg-brand-700 transition-colors disabled:opacity-50">{loading ? 'Signing in...' : 'Sign In'}</button>
         </form>
       </div>
@@ -1656,9 +1656,9 @@ function AdminUsersPage() {
       </div>
       {showCreate && (
         <div className="space-y-4 pt-4 border-t border-surface-100">
-          <FormField label="Full Name *"><input className={inputCls} type="text" value={newFullName} onChange={e => setNewFullName(e.target.value)} placeholder="Jane Smith" /></FormField>
-          <FormField label="Email"><input className={inputCls} type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="user@company.com" /></FormField>
-          <FormField label="Password"><input className={inputCls} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 characters" /></FormField>
+          <FormField label="Full Name *"><input id="new-full-name" name="full_name" className={inputCls} type="text" value={newFullName} onChange={e => setNewFullName(e.target.value)} placeholder="Jane Smith" autoComplete="off" /></FormField>
+          <FormField label="Email"><input id="new-email" name="new_email" className={inputCls} type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="user@company.com" autoComplete="off" /></FormField>
+          <FormField label="Password"><input id="new-password" name="new_password" className={inputCls} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 characters" autoComplete="new-password" /></FormField>
           <FormField label="Role">
             <select className={inputCls} value={newRole} onChange={e => setNewRole(e.target.value)}>
               <option value="user">User — view projects + log EBS tasks</option>
@@ -1677,7 +1677,7 @@ function AdminUsersPage() {
       <h3 className="text-sm font-semibold text-surface-700 mb-4">Reset User Password</h3>
       <p className="text-sm text-surface-500 mb-4">Enter the email address of the user. They will receive a reset link.</p>
       <div className="flex gap-3">
-        <input className={`${inputCls} flex-1`} type="email" value={resetTarget} onChange={e => setResetTarget(e.target.value)} placeholder="user@company.com" />
+        <input id="reset-email" name="reset_email" className={`${inputCls} flex-1`} type="email" value={resetTarget} onChange={e => setResetTarget(e.target.value)} placeholder="user@company.com" autoComplete="off" />
         <button onClick={handleResetPassword} disabled={!resetTarget} className="px-4 py-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 font-medium text-sm disabled:opacity-40 transition-colors whitespace-nowrap">Send Reset Link</button>
       </div>
     </div>
