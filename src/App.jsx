@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom'
-import { supabase } from './supabaseClient'
+import { supabase, supabasePublic } from './supabaseClient'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -35,7 +35,7 @@ function ProjectsProvider({ children }) {
   const refreshProjects = useCallback(async () => {
     setProjectsError(null)
     try {
-      const { data, error } = await supabase.from('projects').select('*').order('project_number')
+      const { data, error } = await supabasePublic.from('projects').select('*').order('project_number')
       if (error) throw error
       setProjects(data || [])
     } catch (e) {
@@ -996,9 +996,9 @@ function ProjectDetail() {
     setFetchError(null)
     try {
       const [{ data: p, error: pe }, { data: m, error: me }, { data: r, error: re }] = await Promise.all([
-        supabase.from('projects').select('*').eq('id', id).single(),
-        supabase.from('milestones').select('*').eq('project_id', id).order('milestone_number'),
-        supabase.from('risks').select('*').eq('project_id', id).order('risk_number'),
+        supabasePublic.from('projects').select('*').eq('id', id).single(),
+        supabasePublic.from('milestones').select('*').eq('project_id', id).order('milestone_number'),
+        supabasePublic.from('risks').select('*').eq('project_id', id).order('risk_number'),
       ])
       if (pe) throw pe
       if (me) console.error('Milestones fetch error:', me)
