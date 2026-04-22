@@ -160,9 +160,12 @@ Cache key is versioned (`ebs-tracker-v5`). Bump the version when changing SW beh
 - **`ProjectDetail.fetchAll` had zero error handling** → silent failures. Wrapped in try/catch; added `fetchError` state + retry button.
 - **Form fields missing `id`/`name`/`autoComplete`** → browser autofill warning. Added to all inputs on `LoginPage` and `AdminUsersPage`.
 - **Cross-app auth deadlock** → after logging into EBS Tracker then returning to React app, the first Supabase read hung with no network request. Fixed by introducing the `supabasePublic` second client (see §7).
+- **Login stuck on "Signing in…" after 200 auth response** → `signInWithPassword` returned 200 but UI never transitioned. Cause: Supabase JS v2 fires `onAuthStateChange` callbacks _while still holding the internal GoTrue lock_. The callback did `await fetchProfile()` which called `supabase.from('profiles')...` — that query then tried to acquire the same lock → self-deadlock. Fixed by (a) using `supabasePublic` inside `fetchProfile`, and (b) making both `onAuthStateChange` and `getSession().then()` callbacks synchronous — fire-and-forget the profile fetch instead of awaiting it.
 
 ### Pattern
 All these silent-failure bugs were "no console error, no data." Lesson: when a Supabase query returns nothing, always check whether the Network tab shows the request at all. If it doesn't, it's a client-side auth/SW/caching issue, not a data issue.
+
+**Rule for Supabase auth callbacks:** Never `await` a Supabase call inside an `onAuthStateChange` listener or the `.then()` of `getSession()`. The GoTrue lock is still held. Always use `supabasePublic` there, and always fire-and-forget.
 
 ---
 
@@ -210,4 +213,4 @@ npm run build && npm run preview
 
 ---
 
-_Last updated: 2026-04-22 — after adding the two-client Supabase fix for cross-app auth deadlock._
+_Last updated: 2026-04-22 — after fixing the login deadlock (GoTrue lock held during `onAuthStateChange`). `fetchProfile` now uses `supabasePublic`; auth callbacks are fire-and-forget, never `await`._

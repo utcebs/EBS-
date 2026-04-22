@@ -70,7 +70,10 @@ function AuthProvider({ children }) {
 
   const fetchProfile = async (userId) => {
     if (!userId) { setProfile(null); return null }
-    const { data } = await supabase.from('profiles').select('role, full_name').eq('id', userId).maybeSingle()
+    // Use supabasePublic to avoid the auth-client lock. Calling supabase.from()
+    // inside an onAuthStateChange callback deadlocks because the parent auth
+    // operation is still holding the internal GoTrue lock.
+    const { data } = await supabasePublic.from('profiles').select('role, full_name').eq('id', userId).maybeSingle()
     setProfile(data)
     return data
   }
@@ -79,28 +82,24 @@ function AuthProvider({ children }) {
     // Safety fallback — never stay stuck on loading screen
     const timeout = setTimeout(() => setLoading(false), 5000)
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      try {
-        setUser(session?.user ?? null)
-        await fetchProfile(session?.user?.id ?? null)
-      } catch (e) {
-        console.error('Auth init error:', e)
-      } finally {
-        clearTimeout(timeout)
-        setLoading(false)
-      }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      clearTimeout(timeout)
+      setLoading(false)
+      // Fire-and-forget profile fetch — keep getSession's then-callback from
+      // awaiting another Supabase call while auth internals may still be busy.
+      fetchProfile(session?.user?.id ?? null).catch(e => console.error('Auth init profile fetch error:', e))
     }).catch(() => {
       clearTimeout(timeout)
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      try {
-        setUser(session?.user ?? null)
-        await fetchProfile(session?.user?.id ?? null)
-      } catch (e) {
-        console.error('Auth state change error:', e)
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      // Keep this callback synchronous — Supabase holds the GoTrue lock while
+      // firing auth state change listeners, and awaiting any Supabase call
+      // here would deadlock. Fire-and-forget the profile fetch instead.
+      setUser(session?.user ?? null)
+      fetchProfile(session?.user?.id ?? null).catch(e => console.error('Auth state change profile fetch error:', e))
     })
     return () => { subscription.unsubscribe(); clearTimeout(timeout) }
   }, [])
