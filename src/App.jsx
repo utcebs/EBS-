@@ -13,7 +13,7 @@ import {
   RefreshCw, Search, Menu, AlertCircle, ExternalLink, BarChart3,
   ListChecks, FileWarning, Info, ChevronDown, ChevronUp,
   Upload, Download, FileSpreadsheet, Presentation, Sparkles,
-  FileText, UserCog
+  FileText, UserCog, User
 } from 'lucide-react'
 import PptxGenJS from 'pptxgenjs'
 import * as XLSX from 'xlsx'
