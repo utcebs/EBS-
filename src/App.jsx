@@ -611,10 +611,40 @@ function Layout() {
   const isActive = (path) => location.pathname === path || (path !== '/' && location.pathname.startsWith(path))
 
   return <div className="flex h-screen overflow-hidden">
-    {sidebarOpen && <div className="fixed inset-0 bg-black/30 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />}
+    {/* Backdrop — always present when sidebar is open (all screen sizes) */}
+    {sidebarOpen && <div className="fixed inset-0 bg-black/40 z-30" onClick={() => setSidebarOpen(false)} />}
 
-    {/* Desktop sidebar — hidden on mobile */}
-    <aside className={`fixed lg:static z-40 h-full w-64 bg-surface-900 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+    {/* Floating toggle — always visible; Menu icon when closed, Close when open */}
+    {!isLanding && (
+      <button
+        onClick={() => setSidebarOpen(o => !o)}
+        aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+        className="fixed top-4 left-4 z-50 w-11 h-11 rounded-xl bg-surface-900 text-white shadow-lg hover:bg-surface-800 flex items-center justify-center transition-colors"
+        style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+      >
+        {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+      </button>
+    )}
+
+    {/* Floating quick-icons (admin / logout / login) — top-right on all pages except landing */}
+    {!isLanding && (
+      <div
+        className="fixed top-4 right-4 z-50 flex items-center gap-1 bg-surface-900 rounded-xl px-1.5 py-1 shadow-lg"
+        style={{ top: 'max(1rem, env(safe-area-inset-top))' }}
+      >
+        {isAdmin ? (
+          <>
+            <Link to="/admin/users" className="p-2 text-surface-300 hover:text-white transition-colors" title="Manage users"><Users size={18} /></Link>
+            <button onClick={signOut} className="p-2 text-surface-300 hover:text-white transition-colors" title="Sign out"><LogOut size={18} /></button>
+          </>
+        ) : (
+          <Link to="/login" className="p-2 text-surface-300 hover:text-white transition-colors" title="Admin login"><LogIn size={18} /></Link>
+        )}
+      </div>
+    )}
+
+    {/* Sidebar — always overlay, hidden by default on all screen sizes */}
+    <aside className={`fixed z-40 h-full w-64 bg-surface-900 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="px-5 py-5 border-b border-surface-700/50">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl overflow-hidden bg-white flex items-center justify-center"><img src="./ebs-logo.png" alt="EBS" className="w-full h-full object-contain" /></div>
@@ -679,25 +709,8 @@ function Layout() {
 
     {/* Main */}
     <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
-      {/* Mobile top bar */}
-      <div className="lg:hidden sticky top-0 z-20 bg-surface-900 px-4 py-3 flex items-center justify-between" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg overflow-hidden bg-white flex items-center justify-center"><img src="./ebs-logo.png" alt="EBS" className="w-full h-full object-contain" /></div>
-          <h1 className="text-sm font-bold text-white font-display">EBS Projects</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {isAdmin ? (
-            <>
-              <Link to="/admin/users" className="p-2 text-surface-400"><Users size={18} /></Link>
-              <button onClick={signOut} className="p-2 text-surface-400"><LogOut size={18} /></button>
-            </>
-          ) : (
-            <Link to="/login" className="p-2 text-surface-400"><LogIn size={18} /></Link>
-          )}
-        </div>
-      </div>
 
-      <div className={isLanding ? '' : 'p-4 sm:p-6 lg:p-8'}>
+      <div className={isLanding ? '' : 'px-4 pt-20 pb-8 sm:px-6 lg:px-8'}>
         <Routes>
           <Route path="/" element={<LandingPage isAdmin={isAdmin} />} />
           <Route path="/dashboard" element={<Dashboard />} />
