@@ -602,6 +602,14 @@ function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isLanding = location.pathname === '/'
 
+  // Scroll to top on every route change. The actual scroll container is
+  // <main id="main-scroll"> (overflow-y-auto) — window scroll is a fallback.
+  useEffect(() => {
+    const el = document.getElementById('main-scroll')
+    if (el) el.scrollTop = 0
+    window.scrollTo(0, 0)
+  }, [location.pathname])
+
   const nav = [
     { path: '/', label: 'Home', icon: Sparkles },
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -703,7 +711,7 @@ function Layout() {
     </aside>
 
     {/* Main */}
-    <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
+    <main id="main-scroll" className="flex-1 overflow-y-auto pb-20 lg:pb-0">
 
       <div className={isLanding ? '' : 'px-4 pt-20 pb-8 sm:px-6 lg:px-8'}>
         <Routes>
