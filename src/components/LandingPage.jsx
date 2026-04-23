@@ -224,26 +224,31 @@ export default function LandingPage({ isAdmin }) {
             <span className="h-px w-10 bg-white/30" />
           </div>
 
-          {/* Logo — white-on-transparent mark sitting directly on the hero.
-             A soft radial halo behind it gives the glyph lift without any
-             plate/tile chrome. */}
-          <div
-            className="relative flex items-center justify-center mb-12"
-            style={{ width: 'min(480px, 86vw)', aspectRatio: '1 / 1' }}
-          >
-            {/* ambient glow behind the logo */}
+          {/* Logos — EBS + Union Trading, white-on-transparent, side-by-side
+             with a slim divider. A single soft halo behind both gives lift
+             without plate/tile chrome. */}
+          <div className="relative flex items-center justify-center mb-12 w-full max-w-3xl">
+            {/* ambient glow spanning both marks */}
             <div
-              className="absolute inset-0 rounded-full"
+              className="absolute inset-0 rounded-full pointer-events-none"
               style={{
                 background:
                   'radial-gradient(closest-side, rgba(255,255,255,0.12), rgba(255,255,255,0) 70%)',
               }}
             />
-            <img
-              src="./ebs-logo-white.png"
-              alt="EBS"
-              className="relative w-full h-full object-contain drop-shadow-[0_6px_40px_rgba(255,255,255,0.15)]"
-            />
+            <div className="relative flex items-center justify-center gap-8 sm:gap-12">
+              <img
+                src="./ebs-logo-white.png"
+                alt="EBS"
+                className="w-auto h-36 sm:h-44 lg:h-52 object-contain drop-shadow-[0_6px_40px_rgba(255,255,255,0.15)]"
+              />
+              <div className="w-px h-20 sm:h-24 lg:h-28 bg-white/20" />
+              <img
+                src="./union-trading-logo-white.png"
+                alt="Union Trading Co."
+                className="w-auto h-20 sm:h-24 lg:h-28 object-contain drop-shadow-[0_6px_40px_rgba(255,255,255,0.15)]"
+              />
+            </div>
           </div>
 
           {/* Title */}
