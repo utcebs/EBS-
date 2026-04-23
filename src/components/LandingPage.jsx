@@ -261,7 +261,7 @@ export default function LandingPage({ isAdmin }) {
 
           {/* CTA — inverted high-contrast, echoes the logo's B&W aesthetic */}
           <button
-            onClick={() => navigate('/projects')}
+            onClick={() => navigate('/dashboard')}
             className="mt-10 group inline-flex items-center gap-3 pl-6 pr-4 py-3 bg-white text-black rounded-full font-semibold text-sm tracking-tight hover:bg-white/90 transition-all"
           >
             Explore Projects
