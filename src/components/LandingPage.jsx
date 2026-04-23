@@ -216,88 +216,61 @@ export default function LandingPage({ isAdmin }) {
           </Suspense>
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-20 lg:py-28">
-          {/* Eyebrow rule + label — centered at the top */}
-          <div className="flex items-center justify-center gap-3 mb-14 text-white/60">
+        <div className="relative max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28 flex flex-col items-center text-center">
+          {/* Eyebrow rule + label */}
+          <div className="flex items-center gap-3 mb-10 text-white/60">
             <span className="h-px w-10 bg-white/30" />
             <span className="text-[11px] tracking-[0.35em] uppercase font-semibold">EBS Department</span>
             <span className="h-px w-10 bg-white/30" />
           </div>
 
-          {/* Two-column: editorial quote on the left, wordmark on the right */}
-          <div className="grid lg:grid-cols-[1.1fr_1fr] gap-12 lg:gap-16 items-center">
-            {/* Left — quote in Instrument Serif italic, editorial feel */}
-            <blockquote
-              className="relative text-white/85"
-              style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}
-            >
-              <span
-                aria-hidden
-                className="absolute -top-10 -left-2 text-white/10 select-none"
-                style={{
-                  fontFamily: "'Instrument Serif', Georgia, serif",
-                  fontSize: '9rem',
-                  lineHeight: 1,
-                }}
-              >
-                “
-              </span>
-              <p className="relative text-2xl sm:text-3xl lg:text-[1.95rem] xl:text-4xl leading-[1.35] italic">
-                What we do goes far beyond traditional IT. We're not just maintaining systems or fixing issues — we design, deliver, and evolve the platforms that drive the business forward.
-              </p>
-              <p className="relative mt-6 text-lg sm:text-xl text-white/60 leading-[1.5] italic">
-                EBS reflects our role as strategic partners, focused on enabling operations, innovation, and growth through integrated, business‑focused solutions rather than just technology support.
-              </p>
-            </blockquote>
-
-            {/* Right — Union Trading Co. wordmark */}
-            <div className="relative flex items-center justify-center lg:justify-end w-full">
-              <div
-                className="absolute inset-0 rounded-full pointer-events-none"
-                style={{
-                  background:
-                    'radial-gradient(closest-side, rgba(255,255,255,0.14), rgba(255,255,255,0) 70%)',
-                }}
-              />
-              <img
-                src="./union-trading-logo-white.png"
-                alt="Union Trading Co."
-                className="relative w-full max-w-[560px] h-auto object-contain drop-shadow-[0_8px_60px_rgba(255,255,255,0.2)]"
-              />
-            </div>
+          {/* Union Trading Co. wordmark — white-on-transparent, large, centered */}
+          <div className="relative flex items-center justify-center mb-12 w-full max-w-5xl">
+            <div
+              className="absolute inset-0 rounded-full pointer-events-none"
+              style={{
+                background:
+                  'radial-gradient(closest-side, rgba(255,255,255,0.14), rgba(255,255,255,0) 70%)',
+              }}
+            />
+            <img
+              src="./union-trading-logo-white.png"
+              alt="Union Trading Co."
+              className="relative w-full max-w-[860px] h-auto object-contain drop-shadow-[0_8px_60px_rgba(255,255,255,0.2)]"
+            />
           </div>
 
-          {/* Title + subtitle + CTA, centered below both columns */}
-          <div className="flex flex-col items-center text-center mt-20">
-            <EditableText
-              value={content.hero_title}
-              isAdmin={isAdmin}
-              onSave={v => saveContent('hero_title', v)}
-              className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold font-display leading-[1.05] tracking-tight max-w-4xl"
-              as="h1"
-            />
+          {/* Title */}
+          <EditableText
+            value={content.hero_title}
+            isAdmin={isAdmin}
+            onSave={v => saveContent('hero_title', v)}
+            className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold font-display leading-[1.05] tracking-tight max-w-4xl"
+            as="h1"
+          />
 
-            <EditableText
-              value={content.hero_subtitle}
-              isAdmin={isAdmin}
-              onSave={v => saveContent('hero_subtitle', v)}
-              className="text-base sm:text-lg text-white/65 mt-6 max-w-2xl"
-              as="p"
-            />
+          {/* Subtitle */}
+          <EditableText
+            value={content.hero_subtitle}
+            isAdmin={isAdmin}
+            onSave={v => saveContent('hero_subtitle', v)}
+            className="text-base sm:text-lg text-white/65 mt-6 max-w-2xl"
+            as="p"
+          />
 
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="mt-10 group inline-flex items-center gap-3 pl-6 pr-4 py-3 bg-white text-black rounded-full font-semibold text-sm tracking-tight hover:bg-white/90 transition-all"
-            >
-              Explore Projects
-              <span className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center transition-transform group-hover:translate-x-0.5">
-                <ArrowRight size={15} />
-              </span>
-            </button>
-          </div>
+          {/* CTA — inverted high-contrast, echoes the logo's B&W aesthetic */}
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="mt-10 group inline-flex items-center gap-3 pl-6 pr-4 py-3 bg-white text-black rounded-full font-semibold text-sm tracking-tight hover:bg-white/90 transition-all"
+          >
+            Explore Projects
+            <span className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center transition-transform group-hover:translate-x-0.5">
+              <ArrowRight size={15} />
+            </span>
+          </button>
 
           {/* Secondary — small caption for additional weight */}
-          <div className="mt-14 flex items-center justify-center gap-6 text-[11px] uppercase tracking-[0.25em] text-white/35">
+          <div className="mt-14 flex items-center gap-6 text-[11px] uppercase tracking-[0.25em] text-white/35">
             <span>Enterprise Systems</span>
             <span className="w-1 h-1 rounded-full bg-white/40" />
             <span>Integrations</span>
