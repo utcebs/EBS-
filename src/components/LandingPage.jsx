@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ChevronDown, ChevronUp, ArrowRight, Users, User,
-  Sparkles, Target, Rocket
+  Sparkles, Target, Rocket, Mail
 } from 'lucide-react'
 import { supabase, supabasePublic } from '../supabaseClient'
 import { EditableText, EditableImage } from './Editable'
@@ -423,14 +423,31 @@ export default function LandingPage({ isAdmin }) {
       {/* ─── Footer ──────────────────────────────────────────── */}
       <footer className="bg-surface-900 text-surface-400">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 py-10">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center">
+          <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr_auto] items-center gap-8 sm:gap-12">
+            {/* Union Trading Co. logo */}
+            <div className="flex items-center justify-center sm:justify-start">
               <img
                 src="./union-trading-logo.png"
                 alt="Union Trading Co."
                 className="h-16 sm:h-20 w-auto object-contain opacity-90"
               />
             </div>
+
+            {/* Contact block — centered */}
+            <div className="flex flex-col items-center text-center">
+              <div className="text-[10px] tracking-[0.35em] uppercase font-semibold text-surface-500 mb-2">
+                Contact Us
+              </div>
+              <a
+                href="mailto:ebs@utc.com.kw"
+                className="inline-flex items-center gap-2 text-sm font-medium text-white hover:text-brand-300 transition-colors"
+              >
+                <Mail size={14} className="text-surface-500" />
+                ebs@utc.com.kw
+              </a>
+            </div>
+
+            {/* Editable footer caption */}
             <EditableText
               value={content.footer_text}
               isAdmin={isAdmin}
