@@ -56,31 +56,52 @@ const KUWAIT_HOLIDAY_LABELS = {
 };
 
 // ============================================================
-// RPG Level System
+// RPG Level System — calibrated for 2-year, 9-hour-a-day use
+// Total workload target: ~4,200 h (2 yrs × ~230 working days × 9 h).
 // ============================================================
 const LEVELS = [
-  { level: 1, name: 'Novice',      minHours: 0,   maxHours: 25,       color: '#94a3b8', icon: '⚔️',  class: 'lvl-1' },
-  { level: 2, name: 'Apprentice',  minHours: 26,  maxHours: 75,       color: '#22c55e', icon: '🛡️',  class: 'lvl-2' },
-  { level: 3, name: 'Journeyman',  minHours: 76,  maxHours: 150,      color: '#3b82f6', icon: '⚡',   class: 'lvl-3' },
-  { level: 4, name: 'Expert',      minHours: 151, maxHours: 300,      color: '#8b5cf6', icon: '🔮',  class: 'lvl-4' },
-  { level: 5, name: 'Master',      minHours: 301, maxHours: 500,      color: '#f59e0b', icon: '🌟',  class: 'lvl-5' },
-  { level: 6, name: 'Legend',      minHours: 501, maxHours: Infinity, color: '#ef4444', icon: '👑',  class: 'lvl-6' },
+  { level:  1, name: 'Novice',       minHours: 0,    maxHours: 50,       color: '#94a3b8', icon: '⚔️',  class: 'lvl-1'  },
+  { level:  2, name: 'Apprentice',   minHours: 51,   maxHours: 150,      color: '#22c55e', icon: '🛡️',  class: 'lvl-2'  },
+  { level:  3, name: 'Journeyman',   minHours: 151,  maxHours: 400,      color: '#3b82f6', icon: '⚡',   class: 'lvl-3'  },
+  { level:  4, name: 'Adept',        minHours: 401,  maxHours: 800,      color: '#8b5cf6', icon: '🔮',  class: 'lvl-4'  },
+  { level:  5, name: 'Expert',       minHours: 801,  maxHours: 1400,     color: '#06b6d4', icon: '🌟',  class: 'lvl-5'  },
+  { level:  6, name: 'Specialist',   minHours: 1401, maxHours: 2100,     color: '#ec4899', icon: '🎯',  class: 'lvl-6'  },
+  { level:  7, name: 'Master',       minHours: 2101, maxHours: 2800,     color: '#f59e0b', icon: '👑',  class: 'lvl-7'  },
+  { level:  8, name: 'Grandmaster',  minHours: 2801, maxHours: 3500,     color: '#14b8a6', icon: '💎',  class: 'lvl-8'  },
+  { level:  9, name: 'Legend',       minHours: 3501, maxHours: 4200,     color: '#ef4444', icon: '🔥',  class: 'lvl-9'  },
+  { level: 10, name: 'Immortal',     minHours: 4201, maxHours: Infinity, color: '#f97316', icon: '🏆',  class: 'lvl-10' },
 ];
 
 // ============================================================
-// Badge Definitions
+// Badge Definitions — rebalanced for the 2-year horizon.
+// Thresholds roughly double/triple the old ones so a hard-working
+// user earns badges steadily across the full timeframe instead of
+// running out in month three.
 // ============================================================
 const BADGES = [
-  { id: 'century_knight',   name: 'Century Knight',   desc: 'Log 100+ total hours',                 icon: '💯', check: (s) => s.totalHours >= 100 },
-  { id: 'streak_warrior',   name: 'Streak Warrior',   desc: 'Log tasks 7 consecutive days',         icon: '🔥', check: (s) => s.maxStreak >= 7 },
-  { id: 'support_guardian', name: 'Support Guardian', desc: 'Complete 20+ Support tasks',           icon: '🛡️', check: (s) => s.supportCount >= 20 },
-  { id: 'test_mage',        name: 'Test Mage',        desc: 'Complete 20+ Testing tasks',           icon: '🧪', check: (s) => s.testingCount >= 20 },
-  { id: 'project_champion', name: 'Project Champion', desc: 'Complete 20+ Project tasks',           icon: '🚀', check: (s) => s.projectCount >= 20 },
-  { id: 'powerhouse',       name: 'Powerhouse',       desc: 'Log 8+ hours in a single day',        icon: '⚡', check: (s) => s.maxDayHours >= 8 },
-  { id: 'all_rounder',      name: 'All-Rounder',      desc: 'Use all 3 categories in one week',    icon: '🌟', check: (s) => s.hasAllRounder },
-  { id: 'veteran',          name: 'Veteran',          desc: 'Log tasks on 30+ unique days',        icon: '📅', check: (s) => s.uniqueDays >= 30 },
-  { id: 'prolific',         name: 'Prolific',         desc: 'Complete 50+ tasks total',            icon: '🐦', check: (s) => s.totalTasks >= 50 },
-  { id: 'workhorse',        name: 'Workhorse',        desc: 'Log 250+ total hours',                icon: '🏇', check: (s) => s.totalHours >= 250 },
+  // ── Total hours milestones ────────────────────────────────
+  { id: 'century',          name: 'Century',             desc: 'Log 100+ total hours',                 icon: '💯',  check: (s) => s.totalHours >= 100 },
+  { id: 'half_thousand',    name: 'Half-Thousand',       desc: 'Log 500+ total hours',                 icon: '🏅',  check: (s) => s.totalHours >= 500 },
+  { id: 'millennium',       name: 'Millennium',          desc: 'Log 1,000+ total hours',               icon: '🎖️',  check: (s) => s.totalHours >= 1000 },
+  { id: 'bi_millennium',    name: 'Bi-Millennium',       desc: 'Log 2,000+ total hours',               icon: '🥇',  check: (s) => s.totalHours >= 2000 },
+  { id: 'five_k',           name: 'Five-K',              desc: 'Log 5,000+ total hours',               icon: '🏆',  check: (s) => s.totalHours >= 5000 },
+
+  // ── Consistency / streaks ─────────────────────────────────
+  { id: 'week_warrior',     name: 'Week Warrior',        desc: 'Log tasks 7 consecutive days',         icon: '🔥',  check: (s) => s.maxStreak >= 7 },
+  { id: 'month_marathoner', name: 'Month Marathoner',    desc: 'Log tasks 30 consecutive days',        icon: '🔥',  check: (s) => s.maxStreak >= 30 },
+  { id: 'quarter_champion', name: 'Quarter Champion',    desc: 'Log tasks 90 consecutive days',        icon: '🏅',  check: (s) => s.maxStreak >= 90 },
+  { id: 'year_veteran',     name: 'Year Veteran',        desc: 'Log tasks on 365+ unique days',        icon: '📅',  check: (s) => s.uniqueDays >= 365 },
+
+  // ── Category mastery (higher bars for longer horizon) ─────
+  { id: 'support_guardian', name: 'Support Guardian',    desc: 'Complete 100+ Support tasks',          icon: '🛡️',  check: (s) => s.supportCount >= 100 },
+  { id: 'test_mage',        name: 'Test Mage',           desc: 'Complete 100+ Testing tasks',          icon: '🧪',  check: (s) => s.testingCount >= 100 },
+  { id: 'project_champion', name: 'Project Champion',    desc: 'Complete 100+ Project tasks',          icon: '🚀',  check: (s) => s.projectCount >= 100 },
+
+  // ── Intensity / variety ───────────────────────────────────
+  { id: 'powerhouse',       name: 'Powerhouse',          desc: 'Log 10+ hours in a single day',        icon: '⚡',  check: (s) => s.maxDayHours >= 10 },
+  { id: 'all_rounder',      name: 'All-Rounder',         desc: 'Use all 3 categories in one week',     icon: '🌟',  check: (s) => s.hasAllRounder },
+  { id: 'prolific',         name: 'Prolific',            desc: 'Complete 250+ tasks total',            icon: '🐦',  check: (s) => s.totalTasks >= 250 },
+  { id: 'workhorse',        name: 'Workhorse',           desc: 'Log 1,500+ total hours',               icon: '🏇',  check: (s) => s.totalHours >= 1500 },
 ];
 
 // Category colors — dark mode

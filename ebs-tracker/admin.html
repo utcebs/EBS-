@@ -1105,8 +1105,7 @@ async function viewUser(uid) {
   document.getElementById('userDetailKPIs').innerHTML = `
     <div class="kpi-card accent-purple"><span class="kpi-icon">⏱️</span><div class="kpi-label">Total Hours</div><div class="kpi-value">${stats.totalHours}h</div></div>
     <div class="kpi-card accent-gold"><span class="kpi-icon">📋</span><div class="kpi-label">Total Tasks</div><div class="kpi-value">${stats.totalTasks}</div></div>
-    <div class="kpi-card accent-teal"><span class="kpi-icon">🔥</span><div class="kpi-label">Max Streak</div><div class="kpi-value">${stats.maxStreak}d</div></div>
-    <div class="kpi-card accent-green"><span class="kpi-icon">🎯</span><div class="kpi-label">Accomplishment Rate</div><div class="kpi-value">${stats.accomplishmentRate}%</div></div>`;
+    <div class="kpi-card accent-teal"><span class="kpi-icon">🔥</span><div class="kpi-label">Max Streak</div><div class="kpi-value">${stats.maxStreak}d</div></div>`;
 
   document.getElementById('userDetailTitle').textContent = `${user.full_name}'s Records`;
 

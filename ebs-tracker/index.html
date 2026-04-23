@@ -32,14 +32,38 @@
       margin-bottom: 12px;
       display: none;
     }
+    /* Hide login form until session check completes to prevent flash */
+    .login-box { visibility: hidden; }
+    .login-box.ready { visibility: visible; }
+    .auth-check {
+      position: fixed; inset: 0; display: flex;
+      align-items: center; justify-content: center;
+      background: var(--bg-body, #080d1a); z-index: 5;
+      flex-direction: column; gap: 12px;
+    }
+    .auth-check.hidden { display: none; }
+    .auth-check-spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(99,102,241,0.2);
+      border-top-color: #6366f1;
+      border-radius: 50%; animation: spin 0.9s linear infinite;
+    }
+    .auth-check-text { color: #94a3b8; font-size: 13px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
 <script>document.addEventListener("DOMContentLoaded",()=>{if(typeof initTheme==="function"){initTheme();injectThemeToggle();}});</script>
+  <!-- Full-page auth check overlay: visible while we detect an existing Supabase session. -->
+  <div class="auth-check" id="authCheck">
+    <div class="auth-check-spinner"></div>
+    <div class="auth-check-text">Checking your session…</div>
+  </div>
+
   <div class="login-page">
     <div class="rpg-particles" id="particles"></div>
 
-    <div class="login-box fade-in">
+    <div class="login-box fade-in" id="loginBox">
       <div class="login-logo">
         <img src="logo.png" alt="EBS Tracker" class="logo-dark" style="height:52px;mix-blend-mode:screen;margin-bottom:10px;" /><img src="logo-light.png" alt="EBS Tracker" class="logo-light" style="height:52px;margin-bottom:10px;display:none;" />
         <h1>EBS Tracker</h1>
@@ -77,22 +101,26 @@
   <script src="js/auth.js"></script>
   <script>
     // ── Auto-login: check if already authenticated (via EBS Tracker or Project Website) ──
+    // Overlay is shown by default (CSS `.auth-check`). We either redirect (if a session
+    // is found) or swap the overlay out for the login form. This prevents the brief
+    // login-screen flash admins saw when arriving from the React app.
     (async () => {
-      const banner = document.getElementById('autoLoginBanner');
-      banner.style.display = 'block';
-
-      const synced = await syncSessionFromSupabase();
-      if (synced) {
-        // Session found (either from this app or from project website admin login)
-        banner.textContent = `✅ Welcome back, ${synced.fullName}! Redirecting…`;
-        setTimeout(() => {
+      const overlay = document.getElementById('authCheck');
+      const box = document.getElementById('loginBox');
+      try {
+        const synced = await syncSessionFromSupabase();
+        if (synced) {
+          overlay.querySelector('.auth-check-text').textContent =
+            `✅ Welcome back, ${synced.fullName}! Redirecting…`;
           window.location.href = synced.role === 'admin' ? 'admin.html' : 'dashboard.html';
-        }, 600);
-        return;
+          return;
+        }
+      } catch (e) {
+        console.error('Auth check failed:', e);
       }
-
-      // No session — show login form normally
-      banner.style.display = 'none';
+      // No session — reveal the login form, hide overlay
+      overlay.classList.add('hidden');
+      box.classList.add('ready');
     })();
 
     // ── Floating particles ──────────────────────────────────────

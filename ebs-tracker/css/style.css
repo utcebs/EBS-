@@ -158,7 +158,11 @@ input, select, textarea { font-family: 'DM Sans', sans-serif; }
 .user-avatar.lvl-3 { background: linear-gradient(135deg,#0D2E45,#1A4A6B); border-color: var(--lvl-3); }
 .user-avatar.lvl-4 { background: linear-gradient(135deg,#2D1545,#4A1D72); border-color: var(--lvl-4); }
 .user-avatar.lvl-5 { background: linear-gradient(135deg,#3D2800,#6B4700); border-color: var(--lvl-5); box-shadow: 0 0 12px rgba(201,168,76,0.3); }
-.user-avatar.lvl-6 { background: linear-gradient(135deg,#4A0D0D,#7A1515); border-color: var(--lvl-6); box-shadow: 0 0 16px rgba(192,57,43,0.4); }
+.user-avatar.lvl-6  { background: linear-gradient(135deg,#4A0D0D,#7A1515); border-color: var(--lvl-6); box-shadow: 0 0 16px rgba(192,57,43,0.4); }
+.user-avatar.lvl-7  { background: linear-gradient(135deg,#134E4A,#0F766E); border-color: #14b8a6; box-shadow: 0 0 16px rgba(20,184,166,0.4); }
+.user-avatar.lvl-8  { background: linear-gradient(135deg,#4C1D95,#5B21B6); border-color: #8b5cf6; box-shadow: 0 0 18px rgba(139,92,246,0.45); }
+.user-avatar.lvl-9  { background: linear-gradient(135deg,#7F1D1D,#B91C1C); border-color: #ef4444; box-shadow: 0 0 22px rgba(239,68,68,0.5); }
+.user-avatar.lvl-10 { background: linear-gradient(135deg,#7C2D12,#EA580C); border-color: #f97316; box-shadow: 0 0 28px rgba(249,115,22,0.6); }
 
 .user-info { flex: 1; min-width: 0; }
 .user-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -173,7 +177,11 @@ input, select, textarea { font-family: 'DM Sans', sans-serif; }
 .lvl-fill-3 { background: linear-gradient(90deg, #0D2E45, var(--lvl-3)); }
 .lvl-fill-4 { background: linear-gradient(90deg, #2D1545, var(--lvl-4)); }
 .lvl-fill-5 { background: linear-gradient(90deg, var(--accent-dark), var(--accent-light)); box-shadow: 0 0 8px rgba(201,168,76,0.5); }
-.lvl-fill-6 { background: linear-gradient(90deg, #8B1A1A, var(--lvl-6)); box-shadow: 0 0 10px rgba(192,57,43,0.5); }
+.lvl-fill-6  { background: linear-gradient(90deg, #8B1A1A, var(--lvl-6)); box-shadow: 0 0 10px rgba(192,57,43,0.5); }
+.lvl-fill-7  { background: linear-gradient(90deg, #0F766E, #14b8a6); box-shadow: 0 0 10px rgba(20,184,166,0.5); }
+.lvl-fill-8  { background: linear-gradient(90deg, #5B21B6, #8b5cf6); box-shadow: 0 0 10px rgba(139,92,246,0.5); }
+.lvl-fill-9  { background: linear-gradient(90deg, #B91C1C, #ef4444); box-shadow: 0 0 12px rgba(239,68,68,0.55); }
+.lvl-fill-10 { background: linear-gradient(90deg, #EA580C, #f97316); box-shadow: 0 0 14px rgba(249,115,22,0.6); }
 
 .sidebar-nav { padding: 18px 14px; flex: 1; }
 .nav-link {
@@ -347,7 +355,11 @@ tbody td { padding: 12px 16px; color: var(--text-1); vertical-align: middle; }
 .level-badge.lvl-3 { background: rgba(41,128,185,0.1); border-color: var(--lvl-3); color: var(--lvl-3); }
 .level-badge.lvl-4 { background: rgba(142,68,173,0.1); border-color: var(--lvl-4); color: var(--lvl-4); }
 .level-badge.lvl-5 { background: rgba(201,168,76,0.1); border-color: var(--lvl-5); color: var(--lvl-5); box-shadow: 0 0 14px rgba(201,168,76,0.15); }
-.level-badge.lvl-6 { background: rgba(192,57,43,0.1); border-color: var(--lvl-6); color: var(--lvl-6); box-shadow: 0 0 18px rgba(192,57,43,0.2); }
+.level-badge.lvl-6  { background: rgba(192,57,43,0.1); border-color: var(--lvl-6); color: var(--lvl-6); box-shadow: 0 0 18px rgba(192,57,43,0.2); }
+.level-badge.lvl-7  { background: rgba(20,184,166,0.1);  border-color: #14b8a6; color: #14b8a6; box-shadow: 0 0 16px rgba(20,184,166,0.2); }
+.level-badge.lvl-8  { background: rgba(139,92,246,0.1);  border-color: #8b5cf6; color: #8b5cf6; box-shadow: 0 0 18px rgba(139,92,246,0.25); }
+.level-badge.lvl-9  { background: rgba(239,68,68,0.1);   border-color: #ef4444; color: #ef4444; box-shadow: 0 0 20px rgba(239,68,68,0.3); }
+.level-badge.lvl-10 { background: rgba(249,115,22,0.12); border-color: #f97316; color: #f97316; box-shadow: 0 0 24px rgba(249,115,22,0.35); }
 
 /* ── Achievement badges ───────────────────────────────────── */
 .badges-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }

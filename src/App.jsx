@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase, supabasePublic } from './supabaseClient'
+import LandingPage from './components/LandingPage'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -11,7 +12,8 @@ import {
   CheckCircle2, Clock, Pause, Target, Shield, Eye, ArrowLeft, Save,
   RefreshCw, Search, Menu, AlertCircle, ExternalLink, BarChart3,
   ListChecks, FileWarning, Info, ChevronDown, ChevronUp,
-  Upload, Download, FileSpreadsheet, Presentation
+  Upload, Download, FileSpreadsheet, Presentation, Sparkles,
+  FileText, UserCog
 } from 'lucide-react'
 import PptxGenJS from 'pptxgenjs'
 import * as XLSX from 'xlsx'
@@ -280,6 +282,162 @@ async function parseBulkUpload(file) {
   })
 }
 
+// ─── Milestone Bulk Upload (per-project) ────────────────────
+const MILESTONE_HEADERS = ['Key Deliverable','Target Date','Actual Date','Development Status','UAT Status','Dependencies','Owner','Remarks']
+const MILESTONE_FIELD_MAP = {
+  'Key Deliverable':'deliverable','Target Date':'target_date','Actual Date':'actual_date',
+  'Development Status':'development_status','UAT Status':'uat_status','Dependencies':'dependencies',
+  'Owner':'owner','Remarks':'remarks',
+}
+function downloadMilestoneTemplate() {
+  const sample = ['Sample Deliverable','2026-06-30','','In Progress','Not Started','None','John Doe','On track']
+  const ws = XLSX.utils.aoa_to_sheet([MILESTONE_HEADERS, sample])
+  ws['!cols'] = MILESTONE_HEADERS.map(() => ({ wch: 22 }))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Milestones')
+  const ref = [['Development Status','UAT Status'],['Not Started','Not Started'],['In Progress','Pending'],['Completed','In Progress'],['Blocked','Passed'],['','Failed']]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ref), 'Dropdowns')
+  XLSX.writeFile(wb, 'EBS_Milestones_Template.xlsx')
+}
+async function parseMilestoneBulk(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' })
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+        const out = rows.map(row => {
+          const m = {}
+          Object.entries(MILESTONE_FIELD_MAP).forEach(([excel, db]) => {
+            const val = row[excel]
+            if (val !== undefined && val !== '') m[db] = String(val)
+          })
+          return m
+        }).filter(m => m.deliverable)
+        resolve(out)
+      } catch (err) { reject(err) }
+    }
+    reader.onerror = reject
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+// ─── Risk Bulk Upload (per-project) ─────────────────────────
+const RISK_HEADERS = ['Risk / Issue Description','Impact','Likelihood','Mitigation Action','Owner']
+const RISK_FIELD_MAP = {
+  'Risk / Issue Description':'description','Impact':'impact','Likelihood':'likelihood',
+  'Mitigation Action':'mitigation_action','Owner':'owner',
+}
+function downloadRiskTemplate() {
+  const sample = ['Sample risk description','High','Medium','Weekly review','Jane Smith']
+  const ws = XLSX.utils.aoa_to_sheet([RISK_HEADERS, sample])
+  ws['!cols'] = RISK_HEADERS.map(() => ({ wch: 22 }))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Risks')
+  const ref = [['Impact','Likelihood'],['High','High'],['Medium','Medium'],['Low','Low']]
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ref), 'Dropdowns')
+  XLSX.writeFile(wb, 'EBS_Risks_Template.xlsx')
+}
+async function parseRiskBulk(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array' })
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+        const out = rows.map(row => {
+          const r = {}
+          Object.entries(RISK_FIELD_MAP).forEach(([excel, db]) => {
+            const val = row[excel]
+            if (val !== undefined && val !== '') r[db] = String(val)
+          })
+          return r
+        }).filter(r => r.description)
+        resolve(out)
+      } catch (err) { reject(err) }
+    }
+    reader.onerror = reject
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+// ─── Export all projects/milestones/risks/gantt-data to Excel ───
+async function exportAllToExcel(projects) {
+  // Fetch milestones + risks via supabasePublic
+  const [{ data: ms }, { data: rs }] = await Promise.all([
+    supabasePublic.from('milestones').select('*').order('project_id').order('milestone_number'),
+    supabasePublic.from('risks').select('*').order('project_id').order('risk_number'),
+  ])
+  const milestones = ms || []
+  const risks = rs || []
+  const pNameById = Object.fromEntries(projects.map(p => [p.id, p.project_name]))
+
+  // Sheet 1: Projects
+  const projectsSheet = projects.map(p => ({
+    '#': p.project_number,
+    'Project Name': p.project_name,
+    'Objective': p.objective || '',
+    'Dept / Module': p.dept_module || '',
+    'Business Owner': p.business_owner || '',
+    'Priority': p.priority || '',
+    'Status': p.status || '',
+    'Phase': p.phase || '',
+    'Est Start': p.est_start || '',
+    'Start Date': p.start_date || '',
+    'End Date': p.end_date || '',
+    '% Complete': p.percent_complete || '',
+    'Total Cost (KWD)': p.total_cost_kwd || 0,
+    'Business Impact': p.business_impact || '',
+    'Cost Remarks': p.cost_remarks || '',
+    'Dependencies': p.dependencies || '',
+    'Key Risks': p.key_risks || '',
+    'Mitigation': p.mitigation || '',
+    'Notes / Updates': p.notes_updates || '',
+    'Actions Needed': p.actions_needed || '',
+  }))
+
+  const milestonesSheet = milestones.map(m => ({
+    'Project': pNameById[m.project_id] || `(id ${m.project_id})`,
+    '#': m.milestone_number,
+    'Key Deliverable': m.deliverable || '',
+    'Target Date': m.target_date || '',
+    'Actual Date': m.actual_date || '',
+    'Development Status': m.development_status || '',
+    'UAT Status': m.uat_status || '',
+    'Owner': m.owner || '',
+    'Dependencies': m.dependencies || '',
+    'Remarks': m.remarks || '',
+  }))
+
+  const risksSheet = risks.map(r => ({
+    'Project': pNameById[r.project_id] || `(id ${r.project_id})`,
+    '#': r.risk_number,
+    'Risk / Issue Description': r.description || '',
+    'Impact': r.impact || '',
+    'Likelihood': r.likelihood || '',
+    'Mitigation Action': r.mitigation_action || '',
+    'Owner': r.owner || '',
+  }))
+
+  const ganttSheet = projects.map(p => ({
+    '#': p.project_number,
+    'Project Name': p.project_name,
+    'Status': p.status || '',
+    'Start Date': p.start_date || '',
+    'End Date': p.end_date || '',
+    '% Complete': p.percent_complete || '',
+    'Business Owner': p.business_owner || '',
+  }))
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(projectsSheet), 'Projects')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(milestonesSheet), 'Milestones')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(risksSheet), 'Risks')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ganttSheet), 'Gantt-data')
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  XLSX.writeFile(wb, `EBS_Projects_Export_${today}.xlsx`)
+}
+
 // ─── PPTX Report Generation ────────────────────────────────
 async function generateReport(projects) {
   const pptx = new PptxGenJS()
@@ -442,9 +600,11 @@ function Layout() {
   const { user, signOut, isAdmin } = useAuth()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const isLanding = location.pathname === '/'
 
   const nav = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/', label: 'Home', icon: Sparkles },
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/projects', label: 'Projects', icon: FolderKanban },
     { path: '/gantt', label: 'Gantt', icon: GanttIcon },
   ]
@@ -486,8 +646,12 @@ function Layout() {
         {isAdmin ? (
           <div className="space-y-1">
             <Link to="/admin/users" onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${isActive('/admin') ? 'bg-brand-600/20 text-brand-300' : 'text-surface-400 hover:text-white hover:bg-surface-800'}`}>
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${location.pathname === '/admin/users' ? 'bg-brand-600/20 text-brand-300' : 'text-surface-400 hover:text-white hover:bg-surface-800'}`}>
               <Users size={18} /> Manage Users
+            </Link>
+            <Link to="/admin/team" onClick={() => setSidebarOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${location.pathname === '/admin/team' ? 'bg-brand-600/20 text-brand-300' : 'text-surface-400 hover:text-white hover:bg-surface-800'}`}>
+              <UserCog size={18} /> Landing Team
             </Link>
             <button onClick={signOut} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-surface-400 hover:text-white hover:bg-surface-800 w-full transition-all">
               <LogOut size={18} /> Sign Out
@@ -533,14 +697,16 @@ function Layout() {
         </div>
       </div>
 
-      <div className="p-4 sm:p-6 lg:p-8">
+      <div className={isLanding ? '' : 'p-4 sm:p-6 lg:p-8'}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<LandingPage isAdmin={isAdmin} />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/projects" element={<ProjectTracker />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/gantt" element={<GanttChartPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/team" element={<AdminTeamPage />} />
         </Routes>
       </div>
     </main>
@@ -585,9 +751,9 @@ function Dashboard() {
   const onHold = projects.filter(p => p.status === 'On Hold').length
   const totalCost = projects.reduce((s, p) => s + (parseFloat(p.total_cost_kwd) || 0), 0)
 
-  const byDept = {}
-  projects.forEach(p => { const d = p.dept_module || 'Unassigned'; byDept[d] = (byDept[d] || 0) + 1 })
-  const deptData = Object.entries(byDept).map(([name, value]) => ({ name: name.length > 25 ? name.substring(0, 25) + '…' : name, fullName: name, value })).sort((a, b) => b.value - a.value).slice(0, 10)
+  const byOwner = {}
+  projects.forEach(p => { const o = p.business_owner || 'Unassigned'; byOwner[o] = (byOwner[o] || 0) + 1 })
+  const ownerData = Object.entries(byOwner).map(([name, value]) => ({ name: name.length > 25 ? name.substring(0, 25) + '…' : name, fullName: name, value })).sort((a, b) => b.value - a.value).slice(0, 10)
 
   // Drill-down handlers
   const drillStatus = (status) => {
@@ -602,9 +768,9 @@ function Dashboard() {
     const filtered = projects.filter(p => p.phase === phase)
     setDrillDown({ title: `${phase} Phase Projects (${filtered.length})`, projects: filtered })
   }
-  const drillDept = (dept) => {
-    const filtered = projects.filter(p => (p.dept_module || 'Unassigned') === dept)
-    setDrillDown({ title: `${dept} (${filtered.length})`, projects: filtered })
+  const drillOwner = (owner) => {
+    const filtered = projects.filter(p => (p.business_owner || 'Unassigned') === owner)
+    setDrillDown({ title: `Owner: ${owner} (${filtered.length})`, projects: filtered })
   }
 
   const summaryCards = [
@@ -690,15 +856,15 @@ function Dashboard() {
       </div>
 
       <div className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
-        <h3 className="text-sm font-semibold text-surface-700 mb-1">Projects by Department</h3>
+        <h3 className="text-sm font-semibold text-surface-700 mb-1">Projects by Owner</h3>
         <p className="text-xs text-surface-400 mb-4">Click a bar to see projects</p>
         <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={deptData} layout="vertical" margin={{ left: 10, right: 20 }}>
+          <BarChart data={ownerData} layout="vertical" margin={{ left: 10, right: 20 }}>
             <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
             <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 10 }} />
             <RTooltip />
             <Bar dataKey="value" fill="#4c6ef5" radius={[0, 6, 6, 0]} barSize={18}
-              onClick={(d) => drillDept(d.fullName || d.name)} cursor="pointer" />
+              onClick={(d) => drillOwner(d.fullName || d.name)} cursor="pointer" />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -818,6 +984,10 @@ function ProjectTracker() {
       </div>
       {isAdmin && (
         <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => exportAllToExcel(projects)}
+            className="flex items-center gap-1.5 px-3 py-2 border border-emerald-300 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-medium hover:bg-emerald-100 transition-colors">
+            <FileSpreadsheet size={14} /> Export All → Excel
+          </button>
           <button onClick={downloadTemplate}
             className="flex items-center gap-1.5 px-3 py-2 border border-surface-200 text-surface-600 rounded-xl text-xs font-medium hover:bg-surface-50 transition-colors">
             <Download size={14} /> Template
@@ -990,6 +1160,13 @@ function ProjectDetail() {
   const [showEditProject, setShowEditProject] = useState(false)
   const [dashDrill, setDashDrill] = useState(null) // { title, items, type:'milestones'|'risks' }
   const [fetchError, setFetchError] = useState(null)
+  const [hourLogs, setHourLogs] = useState([])         // raw task_logs for this project
+  const [msUploading, setMsUploading] = useState(false)
+  const [msUploadMsg, setMsUploadMsg] = useState('')
+  const msFileRef = useRef(null)
+  const [rkUploading, setRkUploading] = useState(false)
+  const [rkUploadMsg, setRkUploadMsg] = useState('')
+  const rkFileRef = useRef(null)
 
   const fetchAll = useCallback(async () => {
     setFetchError(null)
@@ -1003,6 +1180,16 @@ function ProjectDetail() {
       if (me) console.error('Milestones fetch error:', me)
       if (re) console.error('Risks fetch error:', re)
       setProject(p); setMilestones(m || []); setRisks(r || [])
+
+      // Secondary: employee hours on this project — depends on p.proj_unique_id
+      if (p?.proj_unique_id) {
+        const { data: logs, error: le } = await supabasePublic
+          .from('task_logs')
+          .select('team_member, hours_spent, log_date, task_project, task_description')
+          .eq('linked_project_id', p.proj_unique_id)
+        if (le) console.error('Task logs fetch error:', le)
+        else setHourLogs(logs || [])
+      }
     } catch (e) {
       console.error('ProjectDetail fetch error:', e)
       setFetchError(e.message || 'Failed to load project data')
@@ -1011,6 +1198,44 @@ function ProjectDetail() {
     }
   }, [id])
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  // Per-project bulk upload — milestones
+  const handleMilestoneBulk = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setMsUploading(true); setMsUploadMsg('')
+    try {
+      const parsed = await parseMilestoneBulk(file)
+      if (parsed.length === 0) { setMsUploadMsg('No valid milestones found in file.'); setMsUploading(false); return }
+      const maxNum = milestones.reduce((m, ms) => Math.max(m, ms.milestone_number || 0), 0)
+      const toInsert = parsed.map((m, i) => ({ ...m, project_id: parseInt(id), milestone_number: maxNum + 1 + i }))
+      const { error } = await supabase.from('milestones').insert(toInsert)
+      if (error) throw error
+      setMsUploadMsg(`Imported ${toInsert.length} milestones.`)
+      fetchAll()
+    } catch (err) { setMsUploadMsg('Error: ' + err.message) }
+    setMsUploading(false)
+    if (msFileRef.current) msFileRef.current.value = ''
+  }
+
+  // Per-project bulk upload — risks
+  const handleRiskBulk = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setRkUploading(true); setRkUploadMsg('')
+    try {
+      const parsed = await parseRiskBulk(file)
+      if (parsed.length === 0) { setRkUploadMsg('No valid risks found in file.'); setRkUploading(false); return }
+      const maxNum = risks.reduce((m, r) => Math.max(m, r.risk_number || 0), 0)
+      const toInsert = parsed.map((r, i) => ({ ...r, project_id: parseInt(id), risk_number: maxNum + 1 + i }))
+      const { error } = await supabase.from('risks').insert(toInsert)
+      if (error) throw error
+      setRkUploadMsg(`Imported ${toInsert.length} risks.`)
+      fetchAll()
+    } catch (err) { setRkUploadMsg('Error: ' + err.message) }
+    setRkUploading(false)
+    if (rkFileRef.current) rkFileRef.current.value = ''
+  }
 
   const saveMilestone = async (data) => {
     if (editMilestone) { await supabase.from('milestones').update(data).eq('id', editMilestone.id) }
@@ -1222,6 +1447,56 @@ function ProjectDetail() {
           </div>
         )}
 
+        {/* Employee hours on this project (from EBS Tracker task_logs) */}
+        {(() => {
+          const byMember = {}
+          hourLogs.forEach(l => {
+            const key = l.team_member || 'Unknown'
+            byMember[key] = (byMember[key] || 0) + parseFloat(l.hours_spent || 0)
+          })
+          const hoursData = Object.entries(byMember)
+            .map(([name, value]) => ({ name, value: Math.round(value * 10) / 10 }))
+            .sort((a, b) => b.value - a.value)
+          const totalHours = hoursData.reduce((s, d) => s + d.value, 0)
+          if (hoursData.length === 0) {
+            return (
+              <div className="bg-white rounded-2xl border border-surface-200 p-6 mt-6">
+                <h3 className="text-sm font-semibold text-surface-700 mb-1">Hours Logged by Employee</h3>
+                <p className="text-xs text-surface-400 mb-3">From EBS Tracker — no team member has logged hours against this project yet.</p>
+              </div>
+            )
+          }
+          return (
+            <div className="bg-white rounded-2xl border border-surface-200 p-6 mt-6">
+              <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                <h3 className="text-sm font-semibold text-surface-700">Hours Logged by Employee</h3>
+                <div className="flex gap-3 text-xs text-surface-500">
+                  <span><strong className="text-surface-700">{hoursData.length}</strong> contributors</span>
+                  <span><strong className="text-surface-700">{totalHours.toFixed(1)}</strong> total hours</span>
+                </div>
+              </div>
+              <p className="text-xs text-surface-400 mb-3">Aggregated from EBS Tracker task logs linked to this project. Click a bar to see individual entries.</p>
+              <ResponsiveContainer width="100%" height={Math.max(180, hoursData.length * 36)}>
+                <BarChart data={hoursData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                  <XAxis type="number" allowDecimals={true} tick={{ fontSize: 11 }} />
+                  <YAxis dataKey="name" type="category" width={130} tick={{ fontSize: 10 }} />
+                  <RTooltip formatter={(v) => [`${v} h`, 'Hours']} />
+                  <Bar dataKey="value" fill="#4c6ef5" radius={[0, 6, 6, 0]} barSize={18}
+                    onClick={(d) => {
+                      const logs = hourLogs.filter(l => (l.team_member || 'Unknown') === d.name)
+                      setDashDrill({
+                        title: `${d.name} — ${d.value.toFixed(1)} h`,
+                        items: logs,
+                        type: 'hour_logs',
+                      })
+                    }}
+                    cursor="pointer" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )
+        })()}
+
         {/* Milestone details list on dashboard */}
         {milestones.length > 0 && (
           <div className="bg-white rounded-2xl border border-surface-200 p-6 mt-6">
@@ -1248,7 +1523,17 @@ function ProjectDetail() {
     {tab === 'milestones' && (
       <div className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
         {isAdmin && (
-          <div className="px-4 py-3 border-b border-surface-100 flex justify-end">
+          <div className="px-4 py-3 border-b border-surface-100 flex items-center gap-2 justify-end flex-wrap">
+            {msUploadMsg && <span className={`text-xs ${msUploadMsg.startsWith('Error') ? 'text-red-600' : 'text-emerald-600'}`}>{msUploadMsg}</span>}
+            <button onClick={downloadMilestoneTemplate}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-surface-200 text-surface-600 rounded-lg text-xs font-medium hover:bg-surface-50 transition-colors">
+              <Download size={13} /> Template
+            </button>
+            <input type="file" ref={msFileRef} accept=".xlsx,.xls,.csv" onChange={handleMilestoneBulk} className="hidden" />
+            <button onClick={() => msFileRef.current?.click()} disabled={msUploading}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-surface-200 text-surface-600 rounded-lg text-xs font-medium hover:bg-surface-50 transition-colors disabled:opacity-50">
+              <Upload size={13} /> {msUploading ? 'Importing…' : 'Bulk Upload'}
+            </button>
             <button onClick={() => { setEditMilestone(null); setShowMilestoneForm(true) }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 transition-colors">
               <Plus size={13} /> Add Milestone
@@ -1299,7 +1584,17 @@ function ProjectDetail() {
     {tab === 'risks' && (
       <div className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
         {isAdmin && (
-          <div className="px-4 py-3 border-b border-surface-100 flex justify-end">
+          <div className="px-4 py-3 border-b border-surface-100 flex items-center gap-2 justify-end flex-wrap">
+            {rkUploadMsg && <span className={`text-xs ${rkUploadMsg.startsWith('Error') ? 'text-red-600' : 'text-emerald-600'}`}>{rkUploadMsg}</span>}
+            <button onClick={downloadRiskTemplate}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-surface-200 text-surface-600 rounded-lg text-xs font-medium hover:bg-surface-50 transition-colors">
+              <Download size={13} /> Template
+            </button>
+            <input type="file" ref={rkFileRef} accept=".xlsx,.xls,.csv" onChange={handleRiskBulk} className="hidden" />
+            <button onClick={() => rkFileRef.current?.click()} disabled={rkUploading}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-surface-200 text-surface-600 rounded-lg text-xs font-medium hover:bg-surface-50 transition-colors disabled:opacity-50">
+              <Upload size={13} /> {rkUploading ? 'Importing…' : 'Bulk Upload'}
+            </button>
             <button onClick={() => { setEditRisk(null); setShowRiskForm(true) }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 transition-colors">
               <Plus size={13} /> Add Risk
@@ -1390,6 +1685,25 @@ function ProjectDetail() {
             </div>
           ))}
           {(dashDrill?.items || []).length === 0 && <p className="text-sm text-surface-400 text-center py-6">No risks match this filter</p>}
+        </div>
+      )}
+      {dashDrill?.type === 'hour_logs' && (
+        <div className="space-y-2">
+          {[...(dashDrill?.items || [])]
+            .sort((a, b) => (a.log_date || '') < (b.log_date || '') ? 1 : -1)
+            .map((l, i) => (
+              <div key={i} className="p-4 rounded-xl border border-surface-100 bg-surface-50">
+                <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-surface-400">{l.log_date}</span>
+                    <span className="text-xs font-semibold bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full">{parseFloat(l.hours_spent || 0)} h</span>
+                  </div>
+                </div>
+                <p className="text-sm font-medium text-surface-800">{l.task_project || '—'}</p>
+                {l.task_description && <p className="text-xs text-surface-500 mt-1">{l.task_description}</p>}
+              </div>
+            ))}
+          {(dashDrill?.items || []).length === 0 && <p className="text-sm text-surface-400 text-center py-6">No task logs</p>}
         </div>
       )}
     </Modal>
@@ -1553,11 +1867,11 @@ function LoginPage() {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState('')
   const [error, setError] = useState(''); const [loading, setLoading] = useState(false)
 
-  useEffect(() => { if (isAdmin) navigate('/') }, [isAdmin, navigate])
+  useEffect(() => { if (isAdmin) navigate('/dashboard') }, [isAdmin, navigate])
 
   const handleLogin = async (e) => {
     e.preventDefault(); setError(''); setLoading(true)
-    try { await signIn(email, password); navigate('/') }
+    try { await signIn(email, password); navigate('/dashboard') }
     catch (err) { setError(err.message || 'Invalid credentials') }
     setLoading(false)
   }
@@ -1579,6 +1893,128 @@ function LoginPage() {
       </div>
     </div>
   </div>
+}
+
+// ─── ADMIN TEAM PAGE ────────────────────────────────────────
+// Lets an admin choose which profiles appear on the landing page team
+// section, set display order, mark one as team lead, edit job title + bio.
+function AdminTeamPage() {
+  const { isAdmin } = useAuth()
+  const navigate = useNavigate()
+  const [profiles, setProfiles] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState(null)
+
+  useEffect(() => { if (!isAdmin) navigate('/login') }, [isAdmin, navigate])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabasePublic
+      .from('profiles')
+      .select('id, full_name, email, role, job_title, bio, avatar_url, display_order, show_on_landing, is_team_lead')
+      .order('display_order', { ascending: true, nullsFirst: false })
+      .order('full_name')
+    setProfiles(data || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const updateProfile = async (id, patch) => {
+    setSavingId(id)
+    try {
+      // If setting is_team_lead=true, clear it on all others first
+      if (patch.is_team_lead === true) {
+        await supabase.from('profiles').update({ is_team_lead: false }).neq('id', id)
+      }
+      const { error } = await supabase.from('profiles').update(patch).eq('id', id)
+      if (error) throw error
+      setProfiles(ps => ps.map(p => p.id === id ? { ...p, ...patch, ...(patch.is_team_lead ? { } : {}) } : (patch.is_team_lead ? { ...p, is_team_lead: false } : p)))
+    } catch (e) { alert('Save failed: ' + e.message) }
+    finally { setSavingId(null) }
+  }
+
+  if (!isAdmin) return null
+  if (loading) return <Spinner />
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold font-display text-surface-900">Landing Team</h1>
+        <p className="text-sm text-surface-500 mt-1">Choose who appears in the team section on the landing page. Mark one member as lead — the rest show below.</p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead><tr className="bg-surface-50 border-b border-surface-200 text-xs font-semibold text-surface-500 uppercase">
+            <th className="px-4 py-3 text-left">Name</th>
+            <th className="px-4 py-3 text-left">Job Title</th>
+            <th className="px-4 py-3 text-center">Show on Landing</th>
+            <th className="px-4 py-3 text-center">Lead</th>
+            <th className="px-4 py-3 text-center">Order</th>
+          </tr></thead>
+          <tbody className="divide-y divide-surface-100">
+            {profiles.map(p => (
+              <tr key={p.id} className={savingId === p.id ? 'opacity-50' : ''}>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {p.avatar_url
+                      ? <img src={p.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      : <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center"><User size={14} className="text-brand-600" /></div>}
+                    <div>
+                      <p className="text-sm font-medium text-surface-800">{p.full_name || '(no name)'}</p>
+                      <p className="text-xs text-surface-400">{p.email}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <input
+                    type="text"
+                    defaultValue={p.job_title || ''}
+                    placeholder="Job title"
+                    onBlur={e => { if (e.target.value !== (p.job_title || '')) updateProfile(p.id, { job_title: e.target.value }) }}
+                    className="w-full px-2 py-1 rounded border border-surface-200 text-sm bg-white focus:outline-none focus:border-brand-400"
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <input
+                    type="checkbox"
+                    checked={!!p.show_on_landing}
+                    onChange={e => updateProfile(p.id, { show_on_landing: e.target.checked })}
+                    className="w-4 h-4 accent-brand-600"
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <input
+                    type="radio"
+                    name="team_lead"
+                    checked={!!p.is_team_lead}
+                    onChange={() => updateProfile(p.id, { is_team_lead: true })}
+                    className="w-4 h-4 accent-brand-600"
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <input
+                    type="number"
+                    defaultValue={p.display_order ?? ''}
+                    onBlur={e => {
+                      const v = e.target.value === '' ? null : parseInt(e.target.value, 10)
+                      if (v !== p.display_order) updateProfile(p.id, { display_order: v })
+                    }}
+                    className="w-16 px-2 py-1 rounded border border-surface-200 text-sm text-center"
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-xs text-surface-400 mt-4">
+        Photos are uploaded inline from the landing page itself (hover on any photo).
+      </p>
+    </div>
+  )
 }
 
 // ─── ADMIN USERS PAGE ───────────────────────────────────────

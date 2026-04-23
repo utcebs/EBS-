@@ -334,6 +334,48 @@ CREATE TABLE IF NOT EXISTS war_day_ranges (
 ALTER TABLE war_day_ranges DISABLE ROW LEVEL SECURITY;
 
 
+-- 10. LANDING PAGE CONTENT (singleton) + profile extensions + priority_tasks on-hold
+-- Canonical migration: supabase/migrations/2026-04-23_landing-and-tracker.sql
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS landing_page_content (
+  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  hero_title TEXT,
+  hero_subtitle TEXT,
+  description TEXT,
+  achievements JSONB,
+  vision TEXT,
+  footer_text TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  updated_by UUID REFERENCES auth.users(id)
+);
+INSERT INTO landing_page_content (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+ALTER TABLE landing_page_content ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "public_read_landing" ON landing_page_content;
+CREATE POLICY "public_read_landing" ON landing_page_content FOR SELECT USING (true);
+DROP POLICY IF EXISTS "admin_update_landing" ON landing_page_content;
+CREATE POLICY "admin_update_landing" ON landing_page_content FOR UPDATE USING (auth.role() = 'authenticated');
+
+-- profiles — extra columns used by the landing page team section
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS avatar_url TEXT,
+  ADD COLUMN IF NOT EXISTS job_title TEXT,
+  ADD COLUMN IF NOT EXISTS bio TEXT,
+  ADD COLUMN IF NOT EXISTS display_order INT,
+  ADD COLUMN IF NOT EXISTS show_on_landing BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS is_team_lead BOOLEAN DEFAULT false;
+
+-- priority_tasks — on-hold status + reason tracking
+ALTER TABLE priority_tasks DROP CONSTRAINT IF EXISTS priority_tasks_status_check;
+ALTER TABLE priority_tasks ADD CONSTRAINT priority_tasks_status_check
+  CHECK (status IN ('pending', 'on_hold', 'done', 'logged'));
+ALTER TABLE priority_tasks
+  ADD COLUMN IF NOT EXISTS hold_reason TEXT,
+  ADD COLUMN IF NOT EXISTS hold_set_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS hold_set_by UUID REFERENCES auth.users(id);
+
+-- Also in the Supabase dashboard, create a Storage bucket named `team-photos`
+-- (public read, authenticated write) for team member avatar uploads.
+
 -- ── Performance indexes ───────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_milestones_project_id ON milestones(project_id);
 CREATE INDEX IF NOT EXISTS idx_risks_project_id      ON risks(project_id);

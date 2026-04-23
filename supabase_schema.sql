@@ -107,3 +107,19 @@ CREATE INDEX idx_milestones_project_id ON milestones(project_id);
 CREATE INDEX idx_risks_project_id ON risks(project_id);
 CREATE INDEX idx_projects_status ON projects(status);
 CREATE INDEX idx_projects_priority ON projects(priority);
+
+-- 7. LANDING PAGE CONTENT (singleton table; see supabase/migrations/2026-04-23_landing-and-tracker.sql)
+CREATE TABLE IF NOT EXISTS landing_page_content (
+  id INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  hero_title TEXT,
+  hero_subtitle TEXT,
+  description TEXT,
+  achievements JSONB,
+  vision TEXT,
+  footer_text TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  updated_by UUID REFERENCES auth.users(id)
+);
+ALTER TABLE landing_page_content ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_read_landing" ON landing_page_content FOR SELECT USING (true);
+CREATE POLICY "admin_update_landing" ON landing_page_content FOR UPDATE USING (auth.role() = 'authenticated');

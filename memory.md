@@ -49,7 +49,11 @@ Both apps are used internally at EBS (Kuwait). Admins can create/edit projects a
 ├── src/
 │   ├── main.jsx                    HashRouter + React.StrictMode
 │   ├── supabaseClient.js           ⚠️ Exports TWO clients (see §7)
-│   ├── App.jsx                     Entire React app in one 1700-line file — all components, routes, providers
+│   ├── App.jsx                     Main React app file — all components, routes, providers
+│   ├── components/
+│   │   ├── LandingPage.jsx         Landing page at `/` (hero, description, achievements, vision, team tree, footer)
+│   │   ├── ParticleNetwork.jsx     R3F / three.js network-of-particles animation in the landing hero
+│   │   └── Editable.jsx            Inline admin edit primitives (EditableText, EditableImage)
 │   └── index.css                   Tailwind entrypoint
 ├── public/
 │   ├── sw.js                       Self-destruct service worker (wipes caches, unregisters itself)
@@ -77,12 +81,14 @@ All React code lives in [src/App.jsx](src/App.jsx) — one big file. Components 
 
 | Path | Component | Purpose |
 |------|-----------|---------|
-| `#/` | `Dashboard` | Portfolio overview — charts, summary cards, drill-down |
-| `#/projects` | `ProjectTracker` | Projects list, search, filter, bulk upload, new/edit/delete |
-| `#/projects/:id` | `ProjectDetail` | Project header, milestones tab, risks tab, project dashboard |
+| `#/` | `LandingPage` | Public department landing — hero, description, achievements, vision, team tree, footer. Admin inline-edits all text and team photos. |
+| `#/dashboard` | `Dashboard` | Portfolio overview — charts, summary cards, drill-down (was at `/` before 2026-04-23) |
+| `#/projects` | `ProjectTracker` | Projects list, search, filter, bulk upload, new/edit/delete, **Export All → Excel** |
+| `#/projects/:id` | `ProjectDetail` | Project header, milestones tab (w/ bulk upload), risks tab (w/ bulk upload), project dashboard with **Hours by Employee** chart |
 | `#/gantt` | `GanttChartPage` | Timeline chart across all projects |
 | `#/login` | `LoginPage` | Admin email/password login |
 | `#/admin/users` | `AdminUsersPage` | Admin — create users, reset passwords |
+| `#/admin/team` | `AdminTeamPage` | Admin — pick which profiles appear on landing page, set lead + display order |
 
 Guests see everything read-only. Admins (`profile.role === 'admin'`) see edit/create/delete buttons.
 
@@ -119,11 +125,18 @@ Guests see everything read-only. Admins (`profile.role === 'admin'`) see edit/cr
 
 ### Tables
 
-- `projects` — `id, project_number, project_name, status, priority, phase, percent_complete, start_date, end_date, dept_module, business_owner, total_cost_kwd, key_risks, dependencies, mitigation, notes_updates, actions_needed, ...`
+- `projects` — `id, project_number, project_name, status, priority, phase, percent_complete, start_date, end_date, dept_module, business_owner, total_cost_kwd, key_risks, dependencies, mitigation, notes_updates, actions_needed, proj_unique_id, ...`
 - `milestones` — tied to `project_id`, has `development_status` + `uat_status`
 - `risks` — tied to `project_id`, has `impact` + `likelihood`
-- `profiles` — one row per auth user, with `role` (`user` or `admin`)
-- `task_logs`, `priority_tasks`, `support_subcategories`, `testing_subcategories`, `project_subcategories`, `employee_leaves`, `war_day_ranges`, `app_settings` — EBS Tracker tables
+- `profiles` — one row per auth user, with `role` (`user` or `admin`). **Extended (2026-04-23)**: `avatar_url`, `job_title`, `bio`, `display_order`, `show_on_landing`, `is_team_lead` — used by the landing page team section.
+- `task_logs` — has `linked_project_id` (TEXT FK → `projects.proj_unique_id`) used by the per-project Hours-by-Employee chart.
+- `priority_tasks` — `status` constraint extended to include `on_hold`. New columns `hold_reason`, `hold_set_at`, `hold_set_by` power the on-hold flow on the tasks board.
+- `landing_page_content` — **new singleton table** with `hero_title`, `hero_subtitle`, `description`, `achievements` (JSONB), `vision`, `footer_text`. Public read, authenticated write.
+- `support_subcategories`, `testing_subcategories`, `project_subcategories`, `employee_leaves`, `war_day_ranges`, `app_settings` — EBS Tracker config tables.
+
+### Storage buckets
+
+- `team-photos` — created in the Supabase Dashboard. Public read; authenticated write. Used for `profiles.avatar_url` uploads from the landing team section (EditableImage).
 
 ### RLS
 
@@ -162,6 +175,21 @@ Cache key is versioned (`ebs-tracker-v5`). Bump the version when changing SW beh
 - **Cross-app auth deadlock** → after logging into EBS Tracker then returning to React app, the first Supabase read hung with no network request. Fixed by introducing the `supabasePublic` second client (see §7).
 - **Login stuck on "Signing in…" after 200 auth response** → `signInWithPassword` returned 200 but UI never transitioned. Cause: Supabase JS v2 fires `onAuthStateChange` callbacks _while still holding the internal GoTrue lock_. The callback did `await fetchProfile()` which called `supabase.from('profiles')...` — that query then tried to acquire the same lock → self-deadlock. Fixed by (a) using `supabasePublic` inside `fetchProfile`, and (b) making both `onAuthStateChange` and `getSession().then()` callbacks synchronous — fire-and-forget the profile fetch instead of awaiting it.
 
+### New (2026-04-23) — Department portal + tracker updates
+- **New LandingPage at `/`**; Dashboard moved to `/dashboard`. Sidebar nav gained "Home" (landing) + "Landing Team" admin link.
+- **3D hero**: `@react-three/fiber@8` (React 18 compat) + particle-network animation in `ParticleNetwork.jsx` — lazy-loaded via `React.lazy` so the main bundle stays smaller. Falls back to static SVG when `prefers-reduced-motion` is set.
+- **Inline admin edit** on landing — `EditableText` + `EditableImage` primitives. Writes go through the auth-enabled `supabase` client. Photos upload to Supabase Storage bucket `team-photos`.
+- **Dashboard chart** — "Projects by Department" replaced with "Projects by Owner" (uses existing `projects.business_owner` text column; no migration needed). Drill-down preserved.
+- **Per-project bulk upload** for milestones + risks, using the same template/parse pattern as projects. Helpers: `downloadMilestoneTemplate`, `parseMilestoneBulk`, `downloadRiskTemplate`, `parseRiskBulk`, `handleMilestoneBulk`, `handleRiskBulk`.
+- **Export all → Excel** — `exportAllToExcel(projects)` fetches milestones + risks in parallel (`supabasePublic`), writes 4-sheet workbook (Projects / Milestones / Risks / Gantt-data), filename `EBS_Projects_Export_YYYYMMDD.xlsx`.
+- **Employee-hours visual** on ProjectDetail dashboard: horizontal bar chart of `SUM(hours_spent)` per `team_member` from `task_logs` where `linked_project_id = project.proj_unique_id`. Clicking a bar opens drill-down modal of individual log entries.
+- **EBS Tracker login-flash** — `ebs-tracker/index.html` now renders a full-page spinner overlay (`.auth-check`) by default; `syncSessionFromSupabase()` either redirects (session found) or reveals the login form. No more visible login flash when arriving from the React app.
+- **tasks.html "Move to Log" modal** — ported project picker from `log.html` (`ensureLogModalProjects`). Month + week now auto-update from the date via `recalcLogModalWeek` listener. `task_logs.linked_project_id` is written on insert.
+- **On-hold for priority_tasks** — `tasks.html` gained a 🚧 Hold button per card + a hold-reason modal. `loadTasks` now fetches `pending` + `on_hold`. Reason visible to everyone (board + admin view). Admins also see `done`/`logged` via status chips.
+- **Status filter chips** for admin on tasks.html — row of clickable chips (Active / Pending / On Hold / Done / Logged / All) with live counts; filter applied in `getVisibleTasks`.
+- **Accomplishment Rate KPI removed** from `performance.html` and `admin.html` (calc still in `utils.js` for back-compat — harmless).
+- **XP + Badges rebalanced** in `ebs-tracker/js/config.js` — 10 levels up to 4,200+ h; badges recalibrated (Century → 5K, Week Warrior → Year Veteran, etc.). CSS for `lvl-7` through `lvl-10` added to `ebs-tracker/css/style.css`.
+
 ### Pattern
 All these silent-failure bugs were "no console error, no data." Lesson: when a Supabase query returns nothing, always check whether the Network tab shows the request at all. If it doesn't, it's a client-side auth/SW/caching issue, not a data issue.
 
@@ -173,13 +201,23 @@ All these silent-failure bugs were "no console error, no data." Lesson: when a S
 
 After any change touching auth, Supabase clients, or service workers, verify in an **incognito window**:
 
-1. ✅ Open `https://utcebs.github.io/EBS-/` fresh — projects load on dashboard + `/projects`
-2. ✅ Click a project → detail page loads milestones + risks
-3. ✅ Navigate to `/ebs-tracker/` → login screen works
-4. ✅ Log in as admin → redirected to EBS Tracker dashboard
-5. ✅ Navigate back to main site at `/` → projects **still load** (this is the regression case)
-6. ✅ Console tab: no red errors
-7. ✅ Network tab filtered by `supabase`: GET requests to `/rest/v1/projects` return 200 with array
+1. ✅ Open `https://utcebs.github.io/EBS-/` fresh — Landing page loads (hero animation, description, achievements, vision, team tree, footer).
+2. ✅ Click **View our Projects** → `/#/projects` loads with full list.
+3. ✅ `/#/dashboard` shows Portfolio charts. "Projects by Owner" chart populated; clicking a bar drills down.
+4. ✅ Click a project → detail page loads milestones + risks + Employee-hours chart.
+5. ✅ Admin: Export All → Excel downloads a 4-sheet workbook with data populated.
+6. ✅ Admin: in a project, Milestones tab shows Template + Bulk Upload buttons; template downloads; sample upload inserts rows.
+7. ✅ Same check on Risks tab.
+8. ✅ Admin: `/#/admin/team` lets you toggle `show_on_landing`, set display order + team lead; inline edit on landing saves names/titles/bios/photos.
+9. ✅ Navigate to `/ebs-tracker/` — if already logged in, spinner then redirect (no login flash); else login form.
+10. ✅ Log in as admin (from tracker) → redirected to EBS Tracker dashboard.
+11. ✅ Back at `/` → data still loads (cross-app session doesn't deadlock).
+12. ✅ `tasks.html` "Move to Log" modal has project dropdown + month/week auto-update on date change.
+13. ✅ `tasks.html` card: 🚧 Hold button prompts reason; saved on-hold tasks show amber pill + reason inline.
+14. ✅ Admin sees status chips (Active / Pending / On Hold / Done / Logged / All) with live counts; clicking filters the board.
+15. ✅ `performance.html` no longer shows "Accomplishment Rate" KPI.
+16. ✅ User with 1,500 h shows as "Expert" (L5) — new 10-level system live.
+17. ✅ Console: zero red errors; Network: GET `/rest/v1/projects`, `/rest/v1/landing_page_content`, `/rest/v1/profiles` all return 200.
 
 ---
 
@@ -213,4 +251,4 @@ npm run build && npm run preview
 
 ---
 
-_Last updated: 2026-04-22 — after fixing the login deadlock (GoTrue lock held during `onAuthStateChange`). `fetchProfile` now uses `supabasePublic`; auth callbacks are fire-and-forget, never `await`._
+_Last updated: 2026-04-23 — department portal release: new landing page at `/` (Dashboard moved to `/dashboard`), 3D particle-network hero, inline admin edit, Excel export-all, per-project milestone/risk bulk upload, Employee-hours chart on project detail, EBS Tracker login-flash fix, task on-hold flow, admin status chips, 10-level XP rebalance. New Supabase table `landing_page_content`; profiles + priority_tasks extended; Storage bucket `team-photos` created._

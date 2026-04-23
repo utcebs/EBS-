@@ -112,6 +112,10 @@
     <div id="adminFilterSection" style="display:none;">
       <div style="font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Viewing tasks for:</div>
       <div class="user-filter-tabs" id="userFilterTabs"></div>
+
+      <!-- Admin: status chips -->
+      <div style="font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin:16px 0 10px;">Filter by status:</div>
+      <div class="status-chip-row" id="statusChipRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
     </div>
 
     <!-- Summary stat pills -->
@@ -181,6 +185,14 @@
       <label class="form-label">Task / Project <span class="req">*</span></label>
       <input type="text" id="logTaskTitle" class="form-control" />
     </div>
+    <!-- Link to Project (mirrors log.html) -->
+    <div class="form-group" id="logTaskProjectGroup">
+      <label class="form-label" id="logTaskProjectLabel">🔗 Link to Project <span id="logTaskProjectReq" style="display:none;" class="req">*</span></label>
+      <select id="logTaskLinkedProject" class="form-control">
+        <option value="">-- Select a project (optional) --</option>
+      </select>
+      <div class="form-hint" id="logTaskProjectHint">Link this task to a tracked project for analytics.</div>
+    </div>
     <div class="form-group">
       <label class="form-label">Description</label>
       <textarea id="logTaskDesc" class="form-control" rows="2" placeholder="Brief description…"></textarea>
@@ -193,6 +205,17 @@
       <div class="form-group">
         <label class="form-label">Hours Spent <span class="req">*</span></label>
         <input type="number" id="logTaskHours" class="form-control" min="0.25" max="24" step="0.25" placeholder="e.g. 2.5" />
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Month</label>
+        <input type="text" id="logTaskMonth" class="form-control" readonly style="background:rgba(148,163,184,0.08);" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Week #</label>
+        <input type="number" id="logTaskWeek" class="form-control" min="1" max="53" />
+        <div class="form-hint">Auto-calculated from date.</div>
       </div>
     </div>
     <div class="form-group">
@@ -233,6 +256,29 @@
     <div style="display:flex;gap:12px;justify-content:flex-end;">
       <button class="btn btn-secondary" onclick="closeDeleteTaskModal()">Cancel</button>
       <button class="btn btn-danger" id="confirmDeleteTaskBtn">🗑️ Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Put Task On Hold Modal ── -->
+<div class="modal-backdrop" id="holdModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h2 class="modal-title">🚧 Put Task On Hold</h2>
+      <button class="modal-close" onclick="closeHoldModal()">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;">
+      <strong id="holdTaskTitle"></strong>
+    </p>
+    <div class="form-group">
+      <label class="form-label">Why is this task on hold? <span class="req">*</span></label>
+      <textarea id="holdReasonText" class="form-control" rows="3" placeholder="e.g. Waiting on SF Partner — blocked by their UAT availability." maxlength="500"></textarea>
+      <div class="form-hint">Visible to everyone on the board and to the admin.</div>
+    </div>
+    <div id="holdError" class="login-error" style="margin-bottom:12px;"></div>
+    <div style="display:flex;gap:12px;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeHoldModal()">Cancel</button>
+      <button class="btn btn-primary" id="confirmHoldBtn" onclick="confirmHold()">🚧 Put On Hold</button>
     </div>
   </div>
 </div>
@@ -325,6 +371,9 @@ async function init() {
     document.getElementById('sidebarOverlay').classList.toggle('open');
   });
 
+  // Log-modal date → auto-update week + month
+  document.getElementById('logTaskDate').addEventListener('change', recalcLogModalWeek);
+
   initTheme(); injectThemeToggle();
   if (session.role === 'admin') {
     await loadUsers();
@@ -342,6 +391,7 @@ async function init() {
 
   allSubcats = await loadAllSubcats();
   await loadTasks();
+  renderStatusChips();
   renderBoard();
 }
 
@@ -350,10 +400,14 @@ async function loadUsers() {
   allUsers = data || [];
 }
 
+let statusFilter = 'active'; // 'active' (pending+on_hold), 'pending', 'on_hold', 'done', 'logged', 'all'
 async function loadTasks() {
-  let query = db.from('priority_tasks').select('*').eq('status','pending').order('created_at', { ascending: false });
+  // Admin sees all statuses (for filtering); regular users see only their active tasks.
+  const statuses = session.role === 'admin'
+    ? ['pending','on_hold','done','logged']
+    : ['pending','on_hold'];
+  let query = db.from('priority_tasks').select('*').in('status', statuses).order('created_at', { ascending: false });
   if (session.role !== 'admin') {
-    // For non-admins: show own tasks only
     query = query.eq('user_id', session.id);
   }
   const { data, error } = await query;
@@ -364,6 +418,52 @@ async function loadTasks() {
     return;
   }
   allTasks = data || [];
+}
+
+// Render status chips for admin — with live counts. Clicking filters the board.
+const STATUS_META = {
+  active:  { label: 'Active',  emoji: '🎯', color: '#60a5fa' },
+  pending: { label: 'Pending', emoji: '📌', color: '#60a5fa' },
+  on_hold: { label: 'On Hold', emoji: '🚧', color: '#f59e0b' },
+  done:    { label: 'Done',    emoji: '✅', color: '#10b981' },
+  logged:  { label: 'Logged',  emoji: '📝', color: '#8b5cf6' },
+  all:     { label: 'All',     emoji: '📋', color: '#94a3b8' },
+};
+function renderStatusChips() {
+  if (session.role !== 'admin') return;
+  const row = document.getElementById('statusChipRow');
+  if (!row) return;
+  // Respect the user tab filter when computing counts
+  const filtered = activeUserId === 'all' ? allTasks : allTasks.filter(t => t.user_id === activeUserId);
+  const counts = {
+    active:  filtered.filter(t => t.status === 'pending' || t.status === 'on_hold').length,
+    pending: filtered.filter(t => t.status === 'pending').length,
+    on_hold: filtered.filter(t => t.status === 'on_hold').length,
+    done:    filtered.filter(t => t.status === 'done').length,
+    logged:  filtered.filter(t => t.status === 'logged').length,
+    all:     filtered.length,
+  };
+  const order = ['active','pending','on_hold','done','logged','all'];
+  row.innerHTML = order.map(k => {
+    const m = STATUS_META[k];
+    const selected = statusFilter === k;
+    return `<button type="button" class="status-chip${selected?' selected':''}" data-status="${k}"
+      style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;
+             font-size:12px;font-weight:600;cursor:pointer;transition:.15s;
+             border:1px solid ${selected ? m.color : 'var(--border)'};
+             background:${selected ? m.color+'22' : 'transparent'};
+             color:${selected ? m.color : 'var(--text-2)'};">
+      ${m.emoji} ${m.label}
+      <span style="background:${m.color}22;color:${m.color};padding:1px 7px;border-radius:999px;font-size:11px;">${counts[k]}</span>
+    </button>`;
+  }).join('');
+  row.querySelectorAll('.status-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      statusFilter = btn.dataset.status;
+      renderStatusChips();
+      renderBoard();
+    });
+  });
 }
 
 // ── Admin user filter ──────────────────────────────────────
@@ -384,14 +484,25 @@ function buildAdminFilter() {
 function setActiveUser(uid) {
   activeUserId = uid;
   document.querySelectorAll('.uft').forEach(b => b.classList.toggle('active', b.dataset.uid === uid));
+  renderStatusChips();
   renderBoard();
 }
 
 // ── Render board ───────────────────────────────────────────
 function getVisibleTasks() {
-  if (session.role === 'admin' && activeUserId !== 'all') return allTasks.filter(t => t.user_id === activeUserId);
-  if (session.role !== 'admin') return allTasks.filter(t => t.user_id === session.id);
-  return allTasks;
+  let base;
+  if (session.role === 'admin' && activeUserId !== 'all') base = allTasks.filter(t => t.user_id === activeUserId);
+  else if (session.role !== 'admin') base = allTasks.filter(t => t.user_id === session.id);
+  else base = allTasks;
+
+  // Apply admin status filter
+  if (session.role === 'admin') {
+    if (statusFilter === 'all') return base;
+    if (statusFilter === 'active') return base.filter(t => t.status === 'pending' || t.status === 'on_hold');
+    return base.filter(t => t.status === statusFilter);
+  }
+  // Non-admin: only show active (pending + on_hold), done/logged are filtered out server-side already
+  return base;
 }
 
 function dueDateClass(due) {
@@ -417,6 +528,7 @@ function dueDateLabel(due) {
 }
 
 function renderBoard() {
+  renderStatusChips();
   const tasks = getVisibleTasks();
   // Split: my tasks vs assigned to me
   const myTasks       = tasks.filter(t => !t.assigned_by || t.user_id === session.id && !t.assigned_by);
@@ -492,20 +604,38 @@ function renderTaskCard(t) {
   const assignedTag = t.assigned_by
     ? `<span class="assigned-by-tag">📋 Assigned by admin</span>`
     : '';
-  const cardClass = t.assigned_by ? 'task-card p-'+t.priority+' assigned' : 'task-card p-'+t.priority;
+
+  const onHold = t.status === 'on_hold';
+  const holdPill = onHold
+    ? `<span class="p-badge" style="background:rgba(245,158,11,0.15); border-color:#f59e0b; color:#f59e0b;" title="${(t.hold_reason || '').replace(/"/g,'&quot;')}">🚧 On Hold</span>`
+    : '';
+  const holdReasonLine = onHold && t.hold_reason
+    ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px;"><strong style="color:#f59e0b;">Reason:</strong> ${t.hold_reason.replace(/</g,'&lt;')}</div>`
+    : '';
+
+  const cardClass = (t.assigned_by ? 'task-card p-'+t.priority+' assigned' : 'task-card p-'+t.priority) + (onHold ? ' on-hold' : '');
+  const titleEscaped = t.title.replace(/'/g,"\\'");
+
+  const holdBtn = onHold
+    ? `<button class="btn btn-secondary btn-sm" title="Resume task" onclick="resumeTask('${t.id}')">▶ Resume</button>`
+    : `<button class="btn btn-secondary btn-sm" title="Put on hold" onclick="openHoldModal('${t.id}','${titleEscaped}')">🚧 Hold</button>`;
+
   return `<div class="${cardClass}">
     <div class="task-card-body">
       <div class="task-title">${t.title}</div>
       <div class="task-meta">
         <span class="p-badge p-${t.priority}">${PRIORITY_ICONS[t.priority]} ${t.priority}</span>
+        ${holdPill}
         ${dLabel}
         ${ownerName}
         ${assignedTag}
       </div>
+      ${holdReasonLine}
     </div>
     <div class="task-actions">
-      <button class="btn btn-success btn-sm" title="Move to Work Log" onclick="openLogModal('${t.id}','${t.title.replace(/'/g,"\\'")}')"  style="white-space:nowrap;">📝 Log</button>
-      <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="openDeleteTaskModal('${t.id}','${t.title.replace(/'/g,"\\'")}')">🗑️</button>
+      ${onHold ? '' : `<button class="btn btn-success btn-sm" title="Move to Work Log" onclick="openLogModal('${t.id}','${titleEscaped}')"  style="white-space:nowrap;">📝 Log</button>`}
+      ${holdBtn}
+      <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="openDeleteTaskModal('${t.id}','${titleEscaped}')">🗑️</button>
     </div>
   </div>`;
 }
@@ -550,6 +680,41 @@ async function saveTask() {
 }
 
 // ── Move to Log Modal ──────────────────────────────────────
+let logModalProjectLinkMandatory = false;
+async function ensureLogModalProjects() {
+  // Populate linked-project dropdown once
+  const sel = document.getElementById('logTaskLinkedProject');
+  if (sel.dataset.loaded === '1') return;
+  const { data } = await db
+    .from('projects')
+    .select('proj_unique_id, project_name, project_number')
+    .order('project_number');
+  (data || []).forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.proj_unique_id || '';
+    opt.textContent = p.project_name;
+    sel.appendChild(opt);
+  });
+  sel.dataset.loaded = '1';
+
+  // Respect app_settings.project_link_mandatory (same behaviour as log.html)
+  try {
+    const { data: s } = await db.from('app_settings').select('value').eq('key', 'project_link_mandatory').maybeSingle();
+    logModalProjectLinkMandatory = s?.value === 'true';
+    if (logModalProjectLinkMandatory) {
+      document.getElementById('logTaskProjectReq').style.display = 'inline';
+      document.getElementById('logTaskProjectHint').textContent = 'Required — admin has made project linking mandatory.';
+    }
+  } catch (_) {}
+}
+
+function recalcLogModalWeek() {
+  const d = document.getElementById('logTaskDate').value;
+  if (!d) return;
+  document.getElementById('logTaskMonth').value = getMonthName(d);
+  document.getElementById('logTaskWeek').value = getWeekNumber(d);
+}
+
 function openLogModal(id, title) {
   loggingTaskId = id;
   const today = getTodayInfo();
@@ -561,6 +726,9 @@ function openLogModal(id, title) {
   document.getElementById('logTaskSubCategory').value = '';
   document.getElementById('logTaskAccomp').value      = '';
   document.getElementById('logTaskCompleted').checked = false;
+  document.getElementById('logTaskLinkedProject').value = '';
+  document.getElementById('logTaskMonth').value       = today.month;
+  document.getElementById('logTaskWeek').value        = today.week;
   document.getElementById('logModalError').classList.remove('show');
 
   // Populate subcategory dropdown
@@ -578,6 +746,7 @@ function openLogModal(id, title) {
     sel.appendChild(group);
   });
 
+  ensureLogModalProjects();
   document.getElementById('logModal').classList.add('open');
 }
 
@@ -587,6 +756,51 @@ function onSubcatChange() {
   document.getElementById('logTaskCategory').value = opt?.dataset?.cat || '';
 }
 function closeLogModal() { document.getElementById('logModal').classList.remove('open'); loggingTaskId = null; }
+
+// ── On-hold flow ──────────────────────────────────────────
+let holdingTaskId = null;
+function openHoldModal(id, title) {
+  holdingTaskId = id;
+  document.getElementById('holdTaskTitle').textContent = title;
+  document.getElementById('holdReasonText').value = '';
+  document.getElementById('holdError').classList.remove('show');
+  document.getElementById('holdModal').classList.add('open');
+  document.getElementById('holdReasonText').focus();
+}
+function closeHoldModal() { document.getElementById('holdModal').classList.remove('open'); holdingTaskId = null; }
+async function confirmHold() {
+  const reason = document.getElementById('holdReasonText').value.trim();
+  const err = document.getElementById('holdError');
+  err.classList.remove('show');
+  if (!reason) { err.textContent = 'Please enter a reason.'; err.classList.add('show'); return; }
+  if (!holdingTaskId) return;
+  const btn = document.getElementById('confirmHoldBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const { error } = await db.from('priority_tasks').update({
+    status: 'on_hold',
+    hold_reason: reason,
+    hold_set_at: new Date().toISOString(),
+    hold_set_by: session.id,
+  }).eq('id', holdingTaskId);
+  btn.disabled = false; btn.textContent = '🚧 Put On Hold';
+  if (error) { err.textContent = error.message; err.classList.add('show'); return; }
+  showToast('Task put on hold', 'success');
+  closeHoldModal();
+  await loadTasks();
+  renderBoard();
+}
+async function resumeTask(id) {
+  const { error } = await db.from('priority_tasks').update({
+    status: 'pending',
+    hold_reason: null,
+    hold_set_at: null,
+    hold_set_by: null,
+  }).eq('id', id);
+  if (error) { showToast('Failed to resume: ' + error.message, 'error'); return; }
+  showToast('Task resumed', 'success');
+  await loadTasks();
+  renderBoard();
+}
 
 async function submitTaskLog() {
   const btn = document.getElementById('logTaskBtn');
@@ -605,13 +819,24 @@ async function submitTaskLog() {
 
   btn.disabled = true; btn.textContent = 'Saving…';
 
+  // Validate project link if required
+  const linkedProjectId = document.getElementById('logTaskLinkedProject').value || null;
+  if (logModalProjectLinkMandatory && category === 'Project' && !linkedProjectId) {
+    err.textContent = 'Please link this task to a project (required).';
+    err.classList.add('show');
+    return;
+  }
+
+  // Use whatever week the user sees in the field (auto-calculated from date, but user can override)
+  const weekVal = parseInt(document.getElementById('logTaskWeek').value) || getWeekNumber(dateVal);
+
   // Insert task log
   const { error: logErr } = await db.from('task_logs').insert({
     user_id:          session.id,
     team_member:      session.fullName,
     log_date:         dateVal,
     month:            getMonthName(dateVal),
-    week_number:      getWeekNumber(dateVal),
+    week_number:      weekVal,
     task_project:     title,
     task_description: document.getElementById('logTaskDesc').value.trim(),
     category,
@@ -620,6 +845,7 @@ async function submitTaskLog() {
     accomplishment:   document.getElementById('logTaskAccomp').value.trim(),
     comments_notes:   '',
     is_completed:     document.getElementById('logTaskCompleted').checked,
+    linked_project_id: linkedProjectId,
   });
 
   if (logErr) { err.textContent = logErr.message; err.classList.add('show'); btn.disabled=false; btn.innerHTML='💾 Save to Work Log'; return; }
@@ -732,11 +958,14 @@ async function saveAssignedTask() {
 document.getElementById('assignTaskModal')?.addEventListener('click', e => { if (e.target===e.currentTarget) closeAssignModal(); });
 
 // Backdrop close
-['addTaskModal','logModal','deleteTaskModal'].forEach(id => {
-  document.getElementById(id).addEventListener('click', e => {
+['addTaskModal','logModal','deleteTaskModal','holdModal'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('click', e => {
     if (e.target === e.currentTarget) {
       if (id === 'addTaskModal') closeAddModal();
       else if (id === 'logModal') closeLogModal();
+      else if (id === 'holdModal') closeHoldModal();
       else closeDeleteTaskModal();
     }
   });
