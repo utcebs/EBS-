@@ -224,17 +224,26 @@ export default function LandingPage({ isAdmin }) {
             <span className="h-px w-10 bg-white/30" />
           </div>
 
-          {/* Logo — generous white plate. Hard-edged to mirror the mark's own geometry; subtle ring, soft halo, no excess chrome. */}
+          {/* Logo — white-on-transparent mark sitting directly on the hero.
+             A soft radial halo behind it gives the glyph lift without any
+             plate/tile chrome. */}
           <div
-            className="relative bg-white rounded-3xl flex items-center justify-center p-8 sm:p-10 mb-12 ring-1 ring-white/10"
-            style={{
-              width: 'min(440px, 82vw)',
-              aspectRatio: '1 / 1',
-              boxShadow:
-                '0 40px 80px -20px rgba(0,0,0,0.9), 0 0 80px -10px rgba(255,255,255,0.08)',
-            }}
+            className="relative flex items-center justify-center mb-12"
+            style={{ width: 'min(480px, 86vw)', aspectRatio: '1 / 1' }}
           >
-            <img src="./ebs-logo.png" alt="EBS" className="w-full h-full object-contain" />
+            {/* ambient glow behind the logo */}
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{
+                background:
+                  'radial-gradient(closest-side, rgba(255,255,255,0.12), rgba(255,255,255,0) 70%)',
+              }}
+            />
+            <img
+              src="./ebs-logo-white.png"
+              alt="EBS"
+              className="relative w-full h-full object-contain drop-shadow-[0_6px_40px_rgba(255,255,255,0.15)]"
+            />
           </div>
 
           {/* Title */}
