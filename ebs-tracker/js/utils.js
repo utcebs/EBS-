@@ -3,12 +3,14 @@
 // ============================================================
 
 /* ── Date helpers ─────────────────────────────────────────── */
+// Week-of-month scheme: every month has exactly 4 weeks.
+//   Day 1-7   → Week 1
+//   Day 8-14  → Week 2
+//   Day 15-21 → Week 3
+//   Day 22+   → Week 4 (captures the tail of 28–31 day months)
 function getWeekNumber(date) {
   const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-  const w1 = new Date(d.getFullYear(), 0, 4);
-  return 1 + Math.round(((d - w1) / 86400000 - 3 + (w1.getDay() + 6) % 7) / 7);
+  return Math.min(Math.ceil(d.getDate() / 7), 4);
 }
 
 function getMonthName(date) {
@@ -253,7 +255,9 @@ function calculateStats(logs) {
 
   const byWeek = {};
   logs.forEach(l => {
-    const wk = `${new Date(l.log_date).getFullYear()}-W${getWeekNumber(l.log_date)}`;
+    const d = new Date(l.log_date);
+    // Disambiguate across months: Year-Month-Week
+    const wk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-W${getWeekNumber(l.log_date)}`;
     if (!byWeek[wk]) byWeek[wk] = new Set();
     byWeek[wk].add(l.category);
   });
@@ -278,16 +282,22 @@ function getEarnedBadges(stats) {
 }
 
 /* ── Weekly aggregation ───────────────────────────────────── */
+// Keys are Year-Month-Week so buckets across months don't collide when
+// we now use month-based week numbering (W1–W4). Labels show a short
+// "MonWn" (e.g. "Mar W2") on the X axis.
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function aggregateByWeek(logs, nWeeks = 8) {
   const weeks = {};
   for (let i = nWeeks - 1; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i * 7);
-    const wk = `W${getWeekNumber(d)}`;
-    weeks[wk] = { label: wk, hours: 0, tasks: 0 };
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-W${getWeekNumber(d)}`;
+    const label = `${MONTH_SHORT[d.getMonth()]} W${getWeekNumber(d)}`;
+    if (!weeks[key]) weeks[key] = { label, hours: 0, tasks: 0 };
   }
   logs.forEach(l => {
-    const wk = `W${getWeekNumber(l.log_date)}`;
-    if (weeks[wk]) { weeks[wk].hours += parseFloat(l.hours_spent || 0); weeks[wk].tasks++; }
+    const d = new Date(l.log_date);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-W${getWeekNumber(l.log_date)}`;
+    if (weeks[key]) { weeks[key].hours += parseFloat(l.hours_spent || 0); weeks[key].tasks++; }
   });
   return Object.values(weeks);
 }
