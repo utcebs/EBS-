@@ -246,7 +246,7 @@
           <table>
             <thead><tr>
               <th>#</th><th>Date</th><th>Task</th><th>Sub-Category</th><th>Category</th>
-              <th>Hours</th><th>Accomplishment</th><th>Status</th>
+              <th>Hours</th><th>Linked Project</th><th>Accomplishment</th><th>Status</th>
             </tr></thead>
             <tbody id="bulkPreviewBody"></tbody>
           </table>
@@ -514,15 +514,19 @@ async function loadTodayLogs() {
 let bulkRows = [];
 
 async function downloadTemplate() {
-  // Load all subcats for Sheet2 reference
-  const [supRes, tstRes, prjRes] = await Promise.all([
+  // Load all subcats + projects + mandatory setting in parallel
+  const [supRes, tstRes, prjRes, projRes, mandRes] = await Promise.all([
     db.from('support_subcategories').select('name').order('sort_order'),
     db.from('testing_subcategories').select('name').order('sort_order'),
     db.from('project_subcategories').select('name').order('sort_order'),
+    db.from('projects').select('proj_unique_id, project_name, project_number').order('project_number'),
+    db.from('app_settings').select('value').eq('key', 'project_link_mandatory').maybeSingle(),
   ]);
-  const supSubs = (supRes.data||[]).map(r=>r.name);
-  const tstSubs = (tstRes.data||[]).map(r=>r.name);
-  const prjSubs = (prjRes.data||[]).map(r=>r.name);
+  const supSubs    = (supRes.data||[]).map(r=>r.name);
+  const tstSubs    = (tstRes.data||[]).map(r=>r.name);
+  const prjSubs    = (prjRes.data||[]).map(r=>r.name);
+  const allProjects = (projRes.data||[]).filter(p => p.proj_unique_id);
+  const mandatory  = mandRes.data?.value === 'true';
 
   const wb = XLSX.utils.book_new();
 
@@ -536,6 +540,7 @@ async function downloadTemplate() {
     'Accomplishment',
     'Comments / Notes',
     'Is Completed (TRUE/FALSE)',
+    mandatory ? 'Linked Project ID (REQUIRED for Project tasks)' : 'Linked Project ID (optional)',
   ];
   const sample = [
     today.date,
@@ -545,11 +550,12 @@ async function downloadTemplate() {
     'Fixed login issue for client',
     'Follow up needed',
     'FALSE',
+    allProjects[0]?.proj_unique_id || '',
   ];
   const ws1 = XLSX.utils.aoa_to_sheet([headers, sample]);
 
   // Style column widths
-  ws1['!cols'] = [14, 36, 22, 14, 36, 30, 22].map(w => ({ wch: w }));
+  ws1['!cols'] = [14, 36, 22, 14, 36, 30, 22, 26].map(w => ({ wch: w }));
 
   // Add a notes row
   XLSX.utils.sheet_add_aoa(ws1, [
@@ -560,19 +566,35 @@ async function downloadTemplate() {
     ['• Hours must be a number between 0.25 and 24'],
     ['• Is Completed: type TRUE or FALSE (or leave blank for FALSE)'],
     ['• Team member is set automatically from your login'],
+    [mandatory
+      ? '• Linked Project ID is REQUIRED when Sub-Category is a Project sub-category. Use proj_unique_id from Sheet 2 (e.g. Proj-2026-001).'
+      : '• Linked Project ID is OPTIONAL. If filled, use a proj_unique_id from Sheet 2 (e.g. Proj-2026-001). Leave blank for unlinked tasks.'
+    ],
   ], { origin: 'A4' });
 
   XLSX.utils.book_append_sheet(wb, ws1, 'Template');
 
   // ── Sheet 2: Reference values ───────────────────────────
-  const maxRows = Math.max(supSubs.length, tstSubs.length, prjSubs.length);
+  const maxSubRows = Math.max(supSubs.length, tstSubs.length, prjSubs.length);
   const ref = [['🛡️ Support Sub-Categories', '🧪 Testing Sub-Categories', '🚀 Project Sub-Categories']];
-  for (let i = 0; i < maxRows; i++) {
+  for (let i = 0; i < maxSubRows; i++) {
     ref.push([supSubs[i]||'', tstSubs[i]||'', prjSubs[i]||'']);
   }
   const ws2 = XLSX.utils.aoa_to_sheet(ref);
   ws2['!cols'] = [28, 28, 28].map(w => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws2, 'Reference Values');
+
+  // ── Sheet 3: Projects (for Linked Project ID column) ───
+  const projRows = [['Project ID (use in column H)', 'Project #', 'Project Name']];
+  allProjects.forEach(p => {
+    projRows.push([p.proj_unique_id, p.project_number, p.project_name]);
+  });
+  if (allProjects.length === 0) {
+    projRows.push(['(no projects defined yet)', '', '']);
+  }
+  const ws3 = XLSX.utils.aoa_to_sheet(projRows);
+  ws3['!cols'] = [22, 10, 48].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws3, 'Projects');
 
   XLSX.writeFile(wb, 'EBS_Tracker_Bulk_Upload_Template.xlsx');
   showToast('Template downloaded! Fill Sheet 1 and upload it back.', 'success');
@@ -598,16 +620,22 @@ function handleBulkFile(event) {
         if (cell.includes('date') || cell.includes('yyyy')) { dataStart = i + 1; break; }
       }
 
-      // Load subcats for validation
-      const [supRes, tstRes, prjRes] = await Promise.all([
+      // Load subcats + projects + mandatory setting for validation
+      const [supRes, tstRes, prjRes, projRes, mandRes] = await Promise.all([
         db.from('support_subcategories').select('name'),
         db.from('testing_subcategories').select('name'),
         db.from('project_subcategories').select('name'),
+        db.from('projects').select('proj_unique_id, project_name'),
+        db.from('app_settings').select('value').eq('key', 'project_link_mandatory').maybeSingle(),
       ]);
       const allSubcatMap = {};
       (supRes.data||[]).forEach(r => allSubcatMap[r.name.toLowerCase()] = { name:r.name, cat:'Support' });
       (tstRes.data||[]).forEach(r => allSubcatMap[r.name.toLowerCase()] = { name:r.name, cat:'Testing' });
       (prjRes.data||[]).forEach(r => allSubcatMap[r.name.toLowerCase()] = { name:r.name, cat:'Project' });
+
+      const projectMap = {};
+      (projRes.data||[]).forEach(p => { if (p.proj_unique_id) projectMap[p.proj_unique_id.toLowerCase()] = p; });
+      const projectLinkMandatory = mandRes.data?.value === 'true';
 
       bulkRows = [];
       const errors = [];
@@ -663,6 +691,24 @@ function handleBulkFile(event) {
         const compRaw = String(row[6]||'').trim().toUpperCase();
         rowObj.isCompleted = compRaw === 'TRUE' || compRaw === '1' || compRaw === 'YES';
 
+        // Linked Project ID (column H, index 7)
+        const projRaw = String(row[7]||'').trim();
+        if (projRaw) {
+          const match = projectMap[projRaw.toLowerCase()];
+          if (!match) {
+            rowObj.errors.push(`Unknown project ID: "${projRaw}" (check Sheet 3 "Projects")`);
+          }
+          rowObj.linkedProjectId   = match?.proj_unique_id || projRaw;
+          rowObj.linkedProjectName = match?.project_name   || '';
+        } else {
+          rowObj.linkedProjectId   = null;
+          rowObj.linkedProjectName = '';
+          // Enforce mandatory linking on Project-category rows
+          if (projectLinkMandatory && rowObj.category === 'Project') {
+            rowObj.errors.push('Linked Project ID is required for Project tasks (admin setting)');
+          }
+        }
+
         bulkRows.push(rowObj);
       }
 
@@ -688,6 +734,9 @@ function handleBulkFile(event) {
 
       document.getElementById('bulkPreviewBody').innerHTML = bulkRows.map(r => {
         const ok = r.errors.length === 0;
+        const projCell = r.linkedProjectId
+          ? `<span style="font-family:var(--font-mono,monospace);font-size:11px;">${r.linkedProjectId}</span>${r.linkedProjectName ? `<div style="font-size:11px;color:var(--text-3);">${r.linkedProjectName}</div>` : ''}`
+          : '—';
         return `<tr style="${ok?'':'opacity:0.5;'}">
           <td class="td-sm">${r._row}</td>
           <td class="td-sm">${r.date||'—'}</td>
@@ -695,6 +744,7 @@ function handleBulkFile(event) {
           <td>${r.subCategory ? categoryBadge(r.category) + '<span style="font-size:11px;color:var(--text-3);margin-left:4px;">' + r.subCategory + '</span>' : '—'}</td>
           <td>${r.category ? categoryBadge(r.category) : '—'}</td>
           <td>${isNaN(r.hours)?'—':r.hours+'h'}</td>
+          <td class="td-sm">${projCell}</td>
           <td class="td-sm">${r.accomplishment||'—'}</td>
           <td>${ok ? '<span style="color:var(--success);font-weight:700;">✅ Valid</span>' : '<span style="color:var(--danger);font-weight:700;">❌ Error</span>'}</td>
         </tr>`;
@@ -721,19 +771,20 @@ async function confirmBulkUpload() {
   btn.disabled = true; btn.textContent = 'Inserting…';
 
   const records = validRows.map(r => ({
-    user_id:          session.id,
-    team_member:      session.fullName,
-    log_date:         r.date,
-    month:            getMonthName(r.date),
-    week_number:      getWeekNumber(r.date),
-    task_project:     r.task,
-    task_description: '',
-    category:         r.category,
-    sub_category:     r.subCategory,
-    hours_spent:      r.hours,
-    accomplishment:   r.accomplishment,
-    comments_notes:   r.notes,
-    is_completed:     r.isCompleted,
+    user_id:           session.id,
+    team_member:       session.fullName,
+    log_date:          r.date,
+    month:             getMonthName(r.date),
+    week_number:       getWeekNumber(r.date),
+    task_project:      r.task,
+    task_description:  '',
+    category:          r.category,
+    sub_category:      r.subCategory,
+    hours_spent:       r.hours,
+    accomplishment:    r.accomplishment,
+    comments_notes:    r.notes,
+    is_completed:      r.isCompleted,
+    linked_project_id: r.linkedProjectId || null,
   }));
 
   const { error } = await db.from('task_logs').insert(records);
