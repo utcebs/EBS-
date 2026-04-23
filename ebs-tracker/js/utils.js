@@ -330,17 +330,29 @@ function showToast(message, type = 'info') {
 }
 
 /* ── Sidebar ─────────────────────────────────────────────────*/
+// Returns inner HTML for the avatar container given a session.
+// Renders <img> when avatar_url is present, otherwise 2-char initials.
+function avatarInnerHTML(session) {
+  const initials = (session?.fullName || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  if (session?.avatar_url) {
+    // Image fills the 40×40 avatar circle. If it fails to load, fall back to initials.
+    return `<img src="${session.avatar_url}" alt="${session.fullName}"
+      onerror="this.outerHTML='${initials}'"
+      style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`;
+  }
+  return initials;
+}
+
 function renderSidebar(activePage) {
   const session = getSession();
   if (!session) return;
-  const initials = session.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   const adminLink = session.role === 'admin'
     ? `<a href="admin.html" class="nav-link ${activePage === 'admin' ? 'active' : ''}"><span class="nav-icon">👑</span><span>Admin Panel</span></a>` : '';
 
   document.getElementById('app-sidebar').innerHTML = `
     <div class="sidebar-header"><div class="app-logo"><img src="logo.png" alt="EBS" class="logo-dark" style="height:28px;mix-blend-mode:screen;flex-shrink:0;" /><img src="logo-light.png" alt="EBS" class="logo-light" style="height:28px;flex-shrink:0;" /><span class="logo-text">EBS Tracker</span></div></div>
     <div class="sidebar-user">
-      <div class="user-avatar lvl-1" id="sb-avatar">${initials}</div>
+      <div class="user-avatar lvl-1" id="sb-avatar" style="overflow:hidden;">${avatarInnerHTML(session)}</div>
       <div class="user-info"><div class="user-name">${session.fullName}</div><div class="user-level-tag" id="sb-level">Loading...</div></div>
     </div>
     <div class="sidebar-xp">
@@ -363,8 +375,13 @@ function renderSidebar(activePage) {
 
 async function loadSidebarStats(userId) {
   try {
-    const { data } = await db.from('task_logs').select('hours_spent').eq('user_id', userId);
-    const total = (data || []).reduce((s, l) => s + parseFloat(l.hours_spent || 0), 0);
+    // Pull latest profile (for fresh avatar_url) + hours in parallel
+    const [hoursRes, profRes] = await Promise.all([
+      db.from('task_logs').select('hours_spent').eq('user_id', userId),
+      db.from('profiles').select('avatar_url, full_name').eq('id', userId).maybeSingle(),
+    ]);
+
+    const total = (hoursRes.data || []).reduce((s, l) => s + parseFloat(l.hours_spent || 0), 0);
     const lvl = getUserLevel(total), xp = getXPProgress(total);
     const avEl = document.getElementById('sb-avatar');
     const lvEl = document.getElementById('sb-level');
@@ -374,6 +391,24 @@ async function loadSidebarStats(userId) {
     if (lvEl) { lvEl.textContent = `${lvl.icon} ${lvl.name} · Lv.${lvl.level}`; lvEl.style.color = lvl.color; }
     if (fpEl) { fpEl.style.width = `${xp}%`; fpEl.className = `xp-fill lvl-fill-${lvl.level}`; }
     if (lpEl) lpEl.textContent = `${xp}%`;
+
+    // Keep avatar in sync — refresh localStorage session and all avatar/hero-avatar DOM nodes
+    if (profRes.data) {
+      const current = getSession();
+      const fresh = {
+        ...current,
+        avatar_url: profRes.data.avatar_url || null,
+        fullName:   profRes.data.full_name || current?.fullName,
+      };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(fresh));
+
+      // Update all avatar DOM nodes that represent the current user
+      document.querySelectorAll('.user-avatar, .hero-avatar').forEach(el => {
+        if (el.dataset.userId && el.dataset.userId !== userId) return;  // others' avatars unchanged
+        el.style.overflow = 'hidden';
+        el.innerHTML = avatarInnerHTML(fresh);
+      });
+    }
   } catch(e) { console.warn('Sidebar stats error', e); }
 }
 

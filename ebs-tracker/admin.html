@@ -744,7 +744,7 @@ async function init() {
 }
 
 async function loadUsers() {
-  const { data } = await db.from('profiles').select('id, username, full_name, role, email, created_at').order('full_name');
+  const { data } = await db.from('profiles').select('id, username, full_name, role, email, avatar_url, created_at').order('full_name');
   allUsers = data || [];
 }
 
@@ -1860,6 +1860,9 @@ async function loadEmployeeAnalysis() {
   const badges    = getEarnedBadges(stats);
   const earnedCount = badges.filter(b=>b.earned).length;
   const initials  = user.full_name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+  const heroInner = user.avatar_url
+    ? `<img src="${user.avatar_url}" alt="${user.full_name}" onerror="this.outerHTML='${initials}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
+    : initials;
   const daysEq    = convertHoursToDays(logs);
   const hoursPct  = wt.expectedHours > 0 ? Math.min(Math.round((stats.totalHours/wt.expectedHours)*100),999) : 0;
   const attendPct = wt.workingDays > 0 ? Math.min(Math.round((stats.uniqueDays/wt.workingDays)*100),100) : 0;
@@ -1881,7 +1884,7 @@ async function loadEmployeeAnalysis() {
   container.innerHTML = `
     <!-- Hero -->
     <div class="perf-hero" style="margin-bottom:20px;">
-      <div class="hero-avatar ${level.class}" style="border-color:${level.color};background:linear-gradient(135deg,${level.color}33,${level.color}11);">${initials}</div>
+      <div class="hero-avatar ${level.class}" data-user-id="${user.id}" style="border-color:${level.color};background:linear-gradient(135deg,${level.color}33,${level.color}11);overflow:hidden;">${heroInner}</div>
       <div class="hero-info">
         <div class="hero-name">${user.full_name}</div>
         <div class="hero-meta">@${user.username} · ${level.icon} ${level.name} · Lv.${level.level} · 🏅 ${earnedCount}/${badges.length} badges</div>

@@ -14,7 +14,7 @@ async function login(email, password) {
 
     const { data: profile } = await db
       .from('profiles')
-      .select('full_name, role, username')
+      .select('full_name, role, username, avatar_url')
       .eq('id', data.user.id)
       .maybeSingle();
 
@@ -24,6 +24,7 @@ async function login(email, password) {
       username:  profile?.username || data.user.email.split('@')[0],
       fullName:  profile?.full_name || data.user.email.split('@')[0],
       role:      profile?.role || 'user',
+      avatar_url: profile?.avatar_url || null,
       loginTime: new Date().toISOString(),
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -89,17 +90,11 @@ async function syncSessionFromSupabase() {
       return null;
     }
 
-    const local = getSession();
-    if (local && local.id === supaSession.user.id) {
-      // Already in sync
-      return local;
-    }
-
-    // Supabase session exists but no local wt_session
-    // (admin navigated here from project website)
+    // Always re-fetch profile to keep avatar_url fresh (admin may have
+    // uploaded a new one via the landing team editor since last login).
     const { data: profile } = await db
       .from('profiles')
-      .select('full_name, role, username')
+      .select('full_name, role, username, avatar_url')
       .eq('id', supaSession.user.id)
       .maybeSingle();
 
@@ -111,13 +106,16 @@ async function syncSessionFromSupabase() {
       return null;
     }
 
+    const local = getSession();
+
     const session = {
       id:        supaSession.user.id,
       email:     supaSession.user.email,
       username:  profile.username || supaSession.user.email.split('@')[0],
       fullName:  profile.full_name || supaSession.user.email.split('@')[0],
       role:      profile.role || 'user',
-      loginTime: new Date().toISOString(),
+      avatar_url: profile.avatar_url || null,
+      loginTime: local?.loginTime || new Date().toISOString(),
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     return session;
