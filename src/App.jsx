@@ -711,7 +711,7 @@ function Layout() {
     </aside>
 
     {/* Main */}
-    <main id="main-scroll" className="flex-1 overflow-y-auto pb-20 lg:pb-0">
+    <main id="main-scroll" className={`flex-1 overflow-y-auto pb-20 lg:pb-0 ${isLanding ? '' : 'app-dark'}`}>
 
       <div className={isLanding ? '' : 'px-4 pt-20 pb-8 sm:px-6 lg:px-8'}>
         <Routes>

@@ -8,32 +8,35 @@
 
 /* ── CSS Variables — Dark Mode (Default) ──────────────────── */
 :root {
-  --bg-base:      #08090D;
-  --bg-surface:   #0F1018;
-  --bg-card:      #14151F;
-  --bg-card-h:    #1A1B28;
-  --bg-input:     #0F1018;
-  --bg-hover:     #1E1F2E;
+  /* Dark monochrome theme — mirrors the landing page. Black surfaces,
+     near-white text, silver/white accents. Status colors (success,
+     warning, danger, info) keep their semantic hues for data meaning. */
+  --bg-base:      #000000;
+  --bg-surface:   #0A0A0C;
+  --bg-card:      #111114;
+  --bg-card-h:    #18181C;
+  --bg-input:     #0D0D10;
+  --bg-hover:     #1A1A1E;
 
-  --accent:       #C9A84C;
-  --accent-light: #E8C878;
-  --accent-dark:  #A8873A;
-  --accent-glow:  rgba(201,168,76,0.18);
+  --accent:       #FFFFFF;
+  --accent-light: #FFFFFF;
+  --accent-dark:  #C8CAD1;
+  --accent-glow:  rgba(255,255,255,0.12);
 
-  --gold:         #C9A84C;
-  --gold-light:   #E8C878;
+  --gold:         #E6C978;      /* retained but unused for primary accents */
+  --gold-light:   #F4DC94;
   --teal:         #2A9D8F;
-  --success:      #2A9D8F;
-  --warning:      #C9A84C;
-  --danger:       #C0392B;
-  --info:         #2980B9;
+  --success:      #10B981;
+  --warning:      #F59E0B;
+  --danger:       #EF4444;
+  --info:         #60A5FA;
 
-  --text-1:       #F0EBE0;
-  --text-2:       #9A9080;
-  --text-3:       #5A5650;
+  --text-1:       #FFFFFF;
+  --text-2:       rgba(255,255,255,0.72);
+  --text-3:       rgba(255,255,255,0.45);
 
-  --border:       #1E2030;
-  --border-light: #2A2C40;
+  --border:       rgba(255,255,255,0.08);
+  --border-light: rgba(255,255,255,0.14);
 
   --support:      #2980B9;
   --testing:      #8E44AD;
@@ -295,10 +298,10 @@ input, select, textarea { font-family: 'DM Sans', sans-serif; }
   transition: all 0.2s; white-space: nowrap;
   letter-spacing: 0.02em; font-family: 'DM Sans', sans-serif;
 }
-.btn-primary { background: linear-gradient(135deg, var(--accent-dark), var(--accent)); color: #080600; }
-.btn-primary:hover { background: linear-gradient(135deg, var(--accent), var(--accent-light)); box-shadow: 0 4px 20px rgba(201,168,76,0.3); transform: translateY(-1px); }
-.btn-secondary { background: var(--bg-card); color: var(--text-1); border: 1px solid var(--border-light); }
-.btn-secondary:hover { background: var(--bg-hover); border-color: var(--accent-dark); color: var(--accent-light); }
+.btn-primary { background: #FFFFFF; color: #000000; }
+.btn-primary:hover { background: rgba(255,255,255,0.9); box-shadow: 0 4px 20px rgba(255,255,255,0.15); transform: translateY(-1px); }
+.btn-secondary { background: rgba(255,255,255,0.06); color: var(--text-1); border: 1px solid var(--border-light); }
+.btn-secondary:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.3); color: var(--text-1); }
 .btn-danger { background: rgba(192,57,43,0.12); color: #E57A70; border: 1px solid rgba(192,57,43,0.25); }
 .btn-danger:hover { background: rgba(192,57,43,0.22); }
 .btn-success { background: rgba(42,157,143,0.12); color: #5DCEBF; border: 1px solid rgba(42,157,143,0.25); }
@@ -311,7 +314,7 @@ input, select, textarea { font-family: 'DM Sans', sans-serif; }
 /* ── Forms ────────────────────────────────────────────────── */
 .form-group { margin-bottom: 20px; }
 .form-label { display: block; font-size: 11px; font-weight: 700; color: var(--text-3); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.07em; }
-.form-label .req { color: var(--accent); margin-left: 2px; }
+.form-label .req { color: var(--danger); margin-left: 2px; }
 .form-control { width: 100%; background: var(--bg-input); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 11px 14px; color: var(--text-1); font-size: 14px; transition: border-color 0.2s, box-shadow 0.2s; outline: none; }
 .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(201,168,76,0.12); }
 .form-control::placeholder { color: var(--text-3); }

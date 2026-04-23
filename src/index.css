@@ -134,3 +134,110 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 @supports (-webkit-touch-callout: none) {
   body { overscroll-behavior: none; }
 }
+
+/* ═════════════════════════════════════════════════════════════════
+   DARK MONOCHROME THEME — applied to non-landing routes via .app-dark.
+   Mirrors the landing page aesthetic: black background, subtle grid,
+   white/gray typography. Status colors keep their semantic hues but
+   are reshaped for readability on dark surfaces.
+   ═════════════════════════════════════════════════════════════════ */
+
+.app-dark {
+  color: #fff;
+  background-color: #000;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 64px 64px;
+  min-height: 100%;
+}
+
+/* Surfaces */
+.app-dark .bg-white                 { background-color: rgba(255,255,255,0.04) !important; }
+.app-dark .bg-surface-50            { background-color: rgba(255,255,255,0.02) !important; }
+.app-dark .bg-surface-100           { background-color: rgba(255,255,255,0.06) !important; }
+.app-dark .bg-surface-200           { background-color: rgba(255,255,255,0.08) !important; }
+
+/* Borders */
+.app-dark .border-surface-100       { border-color: rgba(255,255,255,0.06) !important; }
+.app-dark .border-surface-200       { border-color: rgba(255,255,255,0.10) !important; }
+.app-dark .border-surface-700\/50   { border-color: rgba(255,255,255,0.10) !important; }
+.app-dark .divide-surface-100 > * + * { border-color: rgba(255,255,255,0.06) !important; }
+.app-dark .divide-surface-200 > * + * { border-color: rgba(255,255,255,0.10) !important; }
+
+/* Text */
+.app-dark .text-surface-900         { color: #fff !important; }
+.app-dark .text-surface-800         { color: rgba(255,255,255,0.95) !important; }
+.app-dark .text-surface-700         { color: rgba(255,255,255,0.85) !important; }
+.app-dark .text-surface-600         { color: rgba(255,255,255,0.72) !important; }
+.app-dark .text-surface-500         { color: rgba(255,255,255,0.58) !important; }
+.app-dark .text-surface-400         { color: rgba(255,255,255,0.45) !important; }
+.app-dark .text-surface-300         { color: rgba(255,255,255,0.35) !important; }
+
+/* Status pill backgrounds — keep semantic hue, tune for dark */
+.app-dark .bg-emerald-50            { background-color: rgba(16, 185, 129, 0.15) !important; }
+.app-dark .bg-amber-50              { background-color: rgba(245, 158, 11, 0.15) !important; }
+.app-dark .bg-red-50                { background-color: rgba(239, 68, 68, 0.15) !important; }
+.app-dark .bg-blue-50               { background-color: rgba(59, 130, 246, 0.15) !important; }
+.app-dark .bg-slate-50              { background-color: rgba(148, 163, 184, 0.15) !important; }
+.app-dark .bg-sky-50                { background-color: rgba(56, 189, 248, 0.15) !important; }
+.app-dark .bg-orange-50             { background-color: rgba(249, 115, 22, 0.15) !important; }
+.app-dark .bg-violet-50             { background-color: rgba(139, 92, 246, 0.15) !important; }
+
+/* Status text — brighten for dark bg readability */
+.app-dark .text-emerald-700         { color: #6ee7b7 !important; }
+.app-dark .text-amber-700           { color: #fcd34d !important; }
+.app-dark .text-red-700             { color: #fca5a5 !important; }
+.app-dark .text-blue-700            { color: #93c5fd !important; }
+.app-dark .text-slate-600           { color: #cbd5e1 !important; }
+.app-dark .text-sky-700             { color: #7dd3fc !important; }
+.app-dark .text-orange-700          { color: #fdba74 !important; }
+.app-dark .text-red-500             { color: #fca5a5 !important; }
+.app-dark .text-red-600             { color: #fca5a5 !important; }
+
+/* Status borders */
+.app-dark .border-emerald-200       { border-color: rgba(16, 185, 129, 0.4) !important; }
+.app-dark .border-amber-200         { border-color: rgba(245, 158, 11, 0.4) !important; }
+.app-dark .border-red-200           { border-color: rgba(239, 68, 68, 0.4) !important; }
+.app-dark .border-blue-200          { border-color: rgba(59, 130, 246, 0.4) !important; }
+.app-dark .border-slate-200         { border-color: rgba(148, 163, 184, 0.35) !important; }
+.app-dark .border-sky-200           { border-color: rgba(56, 189, 248, 0.4) !important; }
+.app-dark .border-orange-200        { border-color: rgba(249, 115, 22, 0.4) !important; }
+
+/* Form inputs on dark bg */
+.app-dark input,
+.app-dark select,
+.app-dark textarea {
+  background-color: rgba(255,255,255,0.05) !important;
+  color: #fff !important;
+  border-color: rgba(255,255,255,0.12) !important;
+}
+.app-dark input::placeholder,
+.app-dark textarea::placeholder     { color: rgba(255,255,255,0.4) !important; }
+
+/* Hovers */
+.app-dark .hover\:bg-surface-50:hover    { background-color: rgba(255,255,255,0.05) !important; }
+.app-dark .hover\:bg-brand-50:hover      { background-color: rgba(255,255,255,0.05) !important; }
+.app-dark .hover\:bg-red-50:hover        { background-color: rgba(239, 68, 68, 0.12) !important; }
+.app-dark .hover\:bg-brand-50\/30:hover  { background-color: rgba(255,255,255,0.04) !important; }
+.app-dark .hover\:bg-brand-50\/50:hover  { background-color: rgba(255,255,255,0.05) !important; }
+.app-dark .hover\:bg-red-50\/50:hover    { background-color: rgba(239, 68, 68, 0.10) !important; }
+.app-dark .hover\:bg-surface-100:hover   { background-color: rgba(255,255,255,0.08) !important; }
+
+/* Table row hover override for dark */
+.app-dark tr.project-row:hover       { background: rgba(255,255,255,0.05) !important; }
+
+/* Brand primary buttons — keep blue, they're clickable affordances */
+.app-dark .bg-brand-600              { background-color: #4263eb !important; }
+.app-dark .hover\:bg-brand-700:hover { background-color: #364fc7 !important; }
+
+/* Shadows are invisible on black — remove heavy ones, use ring */
+.app-dark .shadow-sm                 { box-shadow: 0 0 0 1px rgba(255,255,255,0.04) !important; }
+.app-dark .shadow                    { box-shadow: 0 0 0 1px rgba(255,255,255,0.06) !important; }
+
+/* Brand-colored accent texts/bgs outside status colors */
+.app-dark .text-brand-600            { color: #a5b4fc !important; }
+.app-dark .text-brand-500            { color: #a5b4fc !important; }
+.app-dark .text-brand-400            { color: #a5b4fc !important; }
+.app-dark .bg-brand-100              { background-color: rgba(99,102,241,0.15) !important; }
+.app-dark .bg-brand-50\/30           { background-color: rgba(99,102,241,0.08) !important; }
