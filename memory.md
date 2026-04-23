@@ -175,6 +175,10 @@ Cache key is versioned (`ebs-tracker-v5`). Bump the version when changing SW beh
 - **Cross-app auth deadlock** → after logging into EBS Tracker then returning to React app, the first Supabase read hung with no network request. Fixed by introducing the `supabasePublic` second client (see §7).
 - **Login stuck on "Signing in…" after 200 auth response** → `signInWithPassword` returned 200 but UI never transitioned. Cause: Supabase JS v2 fires `onAuthStateChange` callbacks _while still holding the internal GoTrue lock_. The callback did `await fetchProfile()` which called `supabase.from('profiles')...` — that query then tried to acquire the same lock → self-deadlock. Fixed by (a) using `supabasePublic` inside `fetchProfile`, and (b) making both `onAuthStateChange` and `getSession().then()` callbacks synchronous — fire-and-forget the profile fetch instead of awaiting it.
 
+### Fixed — 2026-04-23 (post-deploy)
+- **`/admin/team` white-screen on click** → `ReferenceError: User is not defined`. `AdminTeamPage` used the lucide `User` icon but only `Users` + `UserCog` were imported. Lesson: Vite/ESBuild doesn't error on missing named imports from side-effect-free barrel files — the reference survives to runtime. When adding a new lucide icon to a component, double-check it's in the top-of-file import list.
+- **Wrong Supabase project** for SQL migration → ran on `alqvknnpgcrupxtomcdv` instead of `hddfkkojfvmjuxsyhcgh`. All DDL succeeded silently but the REST API (pointed at the real project) returned 404/400. Diagnosis: look at the project ref in the Supabase dashboard URL (`/dashboard/project/<ref>/...`) BEFORE running any migration. Always verify by updating a unique marker value then curling the REST API.
+
 ### New (2026-04-23) — Department portal + tracker updates
 - **New LandingPage at `/`**; Dashboard moved to `/dashboard`. Sidebar nav gained "Home" (landing) + "Landing Team" admin link.
 - **3D hero**: `@react-three/fiber@8` (React 18 compat) + particle-network animation in `ParticleNetwork.jsx` — lazy-loaded via `React.lazy` so the main bundle stays smaller. Falls back to static SVG when `prefers-reduced-motion` is set.
