@@ -256,3 +256,78 @@ npm run build && npm run preview
 ---
 
 _Last updated: 2026-04-23 — department portal release: new landing page at `/` (Dashboard moved to `/dashboard`), 3D particle-network hero, inline admin edit, Excel export-all, per-project milestone/risk bulk upload, Employee-hours chart on project detail, EBS Tracker login-flash fix, task on-hold flow, admin status chips, 10-level XP rebalance. New Supabase table `landing_page_content`; profiles + priority_tasks extended; Storage bucket `team-photos` created._
+
+---
+
+## 13. Post-launch iterations log (2026-04-23, after portal release)
+
+Everything below happened in one continuous working session. Captured here so future sessions don't re-explore the same ground.
+
+### Supabase project confusion (solved)
+- User initially ran the landing migration SQL against a **different** Supabase project (`alqvknnpgcrupxtomcdv`). The app connects to `hddfkkojfvmjuxsyhcgh`. Always verify the project ref in the Supabase dashboard URL (`/dashboard/project/<ref>/...`) before migrations.
+- Debugging trick used: update a known row to a unique marker value in SQL, then curl the live REST endpoint. If curl doesn't return the marker → wrong project.
+
+### Auto-confirm trigger
+- Supabase's built-in SMTP has a ~4/hr rate limit; hitting it blocks user creation with `email rate limit exceeded`. Fix: dashboard → Auth → Providers → Email → toggle **"Confirm email" OFF** (do NOT disable the entire Email provider).
+- Plus a belt-and-suspenders trigger in the DB so users are always confirmed:
+  ```sql
+  CREATE TRIGGER auto_confirm_auth_user_trigger
+    BEFORE INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.auto_confirm_auth_user();
+  ```
+  Function sets `NEW.email_confirmed_at := NOW()` if null. Deployed. `confirmed_at` is a generated column — don't try to UPDATE it directly.
+
+### Avatar-sync scoping bug (solved)
+- `loadSidebarStats` in `ebs-tracker/js/utils.js` ran `.querySelectorAll('.user-avatar, .hero-avatar')` and overwrote every match with the current admin's avatar. Rows in the admin users list had no `data-user-id` → they fell through the guard and all got clobbered to look like the admin. This also made newly-created users appear "unchanged".
+- Fix: selector is now `#sb-avatar, [data-user-id="<userId>"]` — only updates tagged elements. User-list rows also got `data-user-id` added as defense-in-depth.
+
+### UI / UX iterations
+- **Sidebar is collapsible on every viewport** now (was desktop-permanent). Floating menu icon top-left, close → restores full-width content. Floating sign-out group top-right. Hidden on landing route.
+- **Manage Users** link removed from the React app's sidebar — user management stays in the EBS Tracker admin panel. `/admin/users` route + component are dead code but left in place.
+- **Landing Team** admin page stays in the sidebar under the admin section.
+- **Scroll resets to top on every route change** — `useEffect` keyed to `location.pathname` scrolls `#main-scroll` (the `<main>` `overflow-y-auto` container) to 0.
+- **Landing → Dashboard CTA**: hero's "Explore Projects" button routes to `/dashboard` (not `/projects`). Achievements section's "View our Projects" still routes to `/projects`.
+- **Vision section bg**: was `from-brand-600 to-brand-800` blue gradient; now pure black with subtle grid + central light pool (matches hero aesthetic).
+- **Team subtitle**: "The people behind the work" → "The minds that power the platform".
+- **Footer**: Union Trading Co. wordmark (left), hardcoded `Contact Us` block with `mailto:ebs@utc.com.kw` (center), editable `footer_text` (right). Stacks on mobile.
+- **Week number**: now month-of-week (1-4). `getWeekNumber` returns `Math.min(Math.ceil(d.getDate()/7), 4)`. Weekly aggregators (`calculateStats` All-Rounder key + `aggregateByWeek` bucketing) disambiguate across months using `YYYY-MM-Wn` keys + `Mon Wn` labels.
+- **Bulk upload template** now includes a Linked Project column (sheet H) + dedicated "Projects" sheet listing valid `proj_unique_id` + name. Parser validates + enforces mandatory linking when `app_settings.project_link_mandatory = true`.
+- **Admin Project Analytics tab** (EBS tracker admin.html): replaced raw-data tables with Chart.js bar charts; clicking a bar opens a drill-down modal of the underlying logs.
+- **Avatar sync**: landing-page photo upload now propagates into the EBS tracker's sidebar + hero avatars. `auth.js` caches `avatar_url` in `wt_session`; `loadSidebarStats` refetches + syncs on every page load.
+- **Performance KPI**: removed the "Accomplishment Rate" card from `performance.html` and `admin.html`. Calculation still computed in `utils.js` but unused.
+- **CI**: workflow bumped to `actions/checkout@v5`, `actions/setup-node@v5`, Node 22. `peaceiris/actions-gh-pages@v4` stays. If the deploy step fails with "HTTP 500 / expected packfile" — transient GitHub git-server flake. Just re-run the workflow.
+
+### Logos / brand assets (multi-iteration)
+- **Browser tab favicon** = `public/favicon.png` + `ebs-tracker/favicon.png` (the Uj-only mark, black on white, dedicated file).
+- **PWA icons / apple-touch** = the old EBS Ü mark, untouched (`icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, and `-light` variants in the tracker).
+- **Landing hero logo** = `public/ebs-logo-white.png` (Ü EBS mark, white on transparent — visible directly on the black hero with a soft radial halo, no tile).
+- **Landing footer** = `public/union-trading-logo.png` (Union Trading Co. wordmark, full color).
+- **EBS tracker in-page logos** = still `ebs-tracker/logo.png` (dark-mode, `mix-blend-mode: screen`) and `logo-light.png` (light-mode). Whenever the hero gets a new EBS mark, both sets want updating.
+
+### Theme port: dark monochrome across every page
+- **Approach**: a single `.app-dark` CSS override layer in `src/index.css` flips `bg-white`, `bg-surface-*`, `text-surface-*`, borders, status pills, inputs, divides, etc. Layout's `<main>` wraps in `app-dark` for every non-landing route. Landing page is untouched (already has its own monochrome design).
+- **Editorial layer**: on top of the base flip, a refined set of rules adds:
+  - Two soft white radial glows in the corners + a subtle SVG grain overlay (film texture), both `position:fixed` at z-index 0
+  - Cards become linear-gradient surfaces with a 1px inner highlight + deep shadow + backdrop-blur
+  - Typography: tighter tracking on headings, tabular numerals via `.font-mono`, stylistic alternates via `.font-display`, 0.12em uppercase tracking
+  - Tables: hairline separators, tracked caps in headers
+  - Modal chrome: gradient panel + hairline, blurred backdrop
+  - Sidebar active link: gradient + inner ring instead of flat tint
+- **Status colors stay semantic**: emerald/amber/red/blue/slate retained, just reshaped at 15% alpha + brightened text for readability.
+- **EBS tracker**: CSS variables in `ebs-tracker/css/style.css` retuned — bg pure black, accent pure white (was gold), primary button white pill with black text, `.req` asterisk switched from accent → danger so it stays visible.
+- **Gotcha**: Tailwind's `border-surface-50` was initially missed in the override list — Gantt chart has many month/row divider lines using that class and they read as bright white lines on black. Fix: explicit `.app-dark .border-surface-50 { border-color: rgba(255,255,255,0.03) !important }` plus tightening `border-surface-100` from 6% → 5%.
+- **Particle animation**: temporarily dimmed to 40% + mix-blend-screen while iterating; restored to 95% opacity with no blend mode so it reads as a prominent silver constellation across the hero.
+
+### Files changed in this iteration session (past the initial portal release)
+- `src/App.jsx` — sidebar collapsible, scroll-to-top, nav entries, misc
+- `src/components/LandingPage.jsx` — hero layout iterations, CTA routing, Vision/Team/Footer copy + layout
+- `src/components/ParticleNetwork.jsx` — blue → silver (monochrome)
+- `src/index.css` — dark theme overrides + editorial layer
+- `index.html` — Google Fonts tweak (Instrument Serif briefly added then removed)
+- `public/favicon.png`, `public/ebs-logo-white.png`, `public/union-trading-logo.png`, `public/union-trading-logo-white.png` — new assets
+- `ebs-tracker/index.html`, `dashboard.html`, `tasks.html`, `log.html`, `performance.html`, `admin.html` — favicon links, bulk upload, analytics charts, on-hold flow, status chips, avatar sync, week label
+- `ebs-tracker/js/auth.js`, `ebs-tracker/js/utils.js` — avatar caching, month-week, scoped sync
+- `ebs-tracker/js/config.js` — 10-level XP + rebalanced badges
+- `ebs-tracker/css/style.css` — monochrome CSS variables
+- `.github/workflows/deploy.yml` — Node 22, action v5
+- Supabase — auto-confirm trigger added; Confirm Email toggle OFF
