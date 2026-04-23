@@ -1048,7 +1048,7 @@ function renderUserList() {
     const initials  = u.full_name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
     const isSelf    = u.id === session.id;
     return `<div class="user-card">
-      <div class="user-avatar ${lvl.class}" style="width:40px;height:40px;font-size:13px;border-color:${lvl.color};background:linear-gradient(135deg,${lvl.color}33,${lvl.color}11)">${initials}</div>
+      <div class="user-avatar ${lvl.class}" data-user-id="${u.id}" style="width:40px;height:40px;font-size:13px;border-color:${lvl.color};background:linear-gradient(135deg,${lvl.color}33,${lvl.color}11)">${initials}</div>
       <div class="user-card-info">
         <div class="user-card-name">${u.full_name}${u.role==='admin'?'<span class="admin-tag">ADMIN</span>':''}</div>
         <div class="user-card-meta">@${u.username} · ${lvl.icon} ${lvl.name} · ${totalHrs.toFixed(1)}h · ${userLogs.length} tasks</div>

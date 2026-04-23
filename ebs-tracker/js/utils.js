@@ -402,9 +402,16 @@ async function loadSidebarStats(userId) {
       };
       localStorage.setItem(SESSION_KEY, JSON.stringify(fresh));
 
-      // Update all avatar DOM nodes that represent the current user
-      document.querySelectorAll('.user-avatar, .hero-avatar').forEach(el => {
-        if (el.dataset.userId && el.dataset.userId !== userId) return;  // others' avatars unchanged
+      // Only update nodes that explicitly represent THIS user:
+      //   - the sidebar avatar (fixed id #sb-avatar)
+      //   - any element carrying a matching data-user-id (e.g. hero avatars)
+      // Nodes without a data-user-id (e.g. rows in the admin Users grid) are
+      // never touched — otherwise every user row in the list would be
+      // overwritten with the signed-in admin's avatar.
+      const selfAvatars = document.querySelectorAll(
+        `#sb-avatar, [data-user-id="${userId}"]`
+      );
+      selfAvatars.forEach(el => {
         el.style.overflow = 'hidden';
         el.innerHTML = avatarInnerHTML(fresh);
       });
