@@ -330,9 +330,19 @@ export default function LandingPage({ isAdmin }) {
       </section>
 
       {/* ─── Vision ──────────────────────────────────────────── */}
-      <section className="bg-gradient-to-br from-brand-600 to-brand-800 text-white">
-        <div className="max-w-4xl mx-auto px-6 lg:px-8 py-16 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-white text-xs font-semibold mb-4">
+      <section className="relative overflow-hidden bg-black text-white">
+        {/* subtle ambient glow echo of the hero */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-[0.07]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)',
+            backgroundSize: '64px 64px',
+          }}
+        />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-white/5 blur-3xl pointer-events-none" />
+        <div className="relative max-w-4xl mx-auto px-6 lg:px-8 py-16 text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-white/90 text-xs font-semibold mb-4">
             <Target size={12} /> OUR VISION
           </div>
           <EditableText
@@ -353,7 +363,7 @@ export default function LandingPage({ isAdmin }) {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold mb-3">
               <Users size={12} /> OUR TEAM
             </div>
-            <h2 className="text-2xl lg:text-3xl font-bold font-display text-surface-900">The people behind the work</h2>
+            <h2 className="text-2xl lg:text-3xl font-bold font-display text-surface-900">The minds that power the platform</h2>
           </div>
 
           {team.length === 0 ? (
