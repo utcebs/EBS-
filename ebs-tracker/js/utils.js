@@ -366,7 +366,7 @@ function renderSidebar(activePage) {
       <a href="tasks.html" class="nav-link ${activePage === 'tasks' ? 'active' : ''}"><span class="nav-icon">📌</span><span>My Tasks</span></a>
       ${adminLink}
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
-        <a href="../index.html" class="nav-link" style="opacity:0.7;"><span class="nav-icon">🏠</span><span>Project Website</span></a>
+        <a href="../index.html#/dashboard" class="nav-link" style="opacity:0.7;"><span class="nav-icon">📊</span><span>Project Dashboard</span></a>
       </div>
     </nav>
     <div class="sidebar-footer"><button class="logout-btn" onclick="logout()"><span>🚪</span> Logout</button></div>
