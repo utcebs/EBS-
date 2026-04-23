@@ -380,14 +380,12 @@ export default function LandingPage({ isAdmin }) {
       <footer className="bg-surface-900 text-surface-400">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 py-10">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl overflow-hidden bg-white flex items-center justify-center p-1.5">
-                <img src="./ebs-logo.png" alt="Company" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <p className="text-white text-sm font-semibold font-display">EBS</p>
-                <p className="text-xs text-surface-500">Enterprise Business Solutions</p>
-              </div>
+            <div className="flex items-center">
+              <img
+                src="./union-trading-logo.png"
+                alt="Union Trading Co."
+                className="h-16 sm:h-20 w-auto object-contain opacity-90"
+              />
             </div>
             <EditableText
               value={content.footer_text}
