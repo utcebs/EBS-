@@ -203,14 +203,13 @@ export default function LandingPage({ isAdmin }) {
           }}
         />
         <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-16 lg:py-24 grid lg:grid-cols-2 gap-10 items-center">
-          {/* Left: logo + text */}
+          {/* Left: huge logo + text */}
           <div>
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-14 h-14 rounded-2xl overflow-hidden bg-white flex items-center justify-center p-2 shadow-lg shadow-brand-500/20">
-                <img src="./ebs-logo.png" alt="EBS" className="w-full h-full object-contain" />
-              </div>
-              <div className="text-xs tracking-widest text-brand-300 uppercase font-semibold">EBS Department</div>
+            <div className="inline-flex items-center justify-center rounded-[2rem] overflow-hidden bg-white p-6 mb-8 shadow-2xl shadow-brand-500/30 ring-1 ring-white/20"
+              style={{ width: 'min(420px, 80vw)', height: 'min(420px, 80vw)' }}>
+              <img src="./ebs-logo.png" alt="EBS Department" className="w-full h-full object-contain" />
             </div>
+            <div className="text-xs tracking-widest text-brand-300 uppercase font-semibold mb-3">EBS Department</div>
             <EditableText
               value={content.hero_title}
               isAdmin={isAdmin}
