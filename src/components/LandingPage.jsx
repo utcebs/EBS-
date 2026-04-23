@@ -209,8 +209,8 @@ export default function LandingPage({ isAdmin }) {
           }}
         />
 
-        {/* Particle network fills the full hero as a backdrop */}
-        <div className="absolute inset-0 opacity-40 mix-blend-screen">
+        {/* Particle network — prominent ambient animation across the hero */}
+        <div className="absolute inset-0 opacity-95 pointer-events-none">
           <Suspense fallback={null}>
             <ParticleNetwork />
           </Suspense>
