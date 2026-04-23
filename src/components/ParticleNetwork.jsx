@@ -64,20 +64,22 @@ function Nodes() {
         if (d < CONNECT_DIST) {
           const alpha = 1 - d / CONNECT_DIST  // fade with distance
           // segment start
+          // Monochrome white/silver line — alpha fades with distance
+          const g = 0.75 + alpha * 0.25
           linePositions[lineIdx * 3 + 0] = nodes[i].pos.x
           linePositions[lineIdx * 3 + 1] = nodes[i].pos.y
           linePositions[lineIdx * 3 + 2] = nodes[i].pos.z
-          lineColors[lineIdx * 3 + 0] = 0.26
-          lineColors[lineIdx * 3 + 1] = 0.39 * alpha + 0.1
-          lineColors[lineIdx * 3 + 2] = 0.96 * alpha + 0.1
+          lineColors[lineIdx * 3 + 0] = g
+          lineColors[lineIdx * 3 + 1] = g
+          lineColors[lineIdx * 3 + 2] = g
           lineIdx++
           // segment end
           linePositions[lineIdx * 3 + 0] = nodes[j].pos.x
           linePositions[lineIdx * 3 + 1] = nodes[j].pos.y
           linePositions[lineIdx * 3 + 2] = nodes[j].pos.z
-          lineColors[lineIdx * 3 + 0] = 0.26
-          lineColors[lineIdx * 3 + 1] = 0.39 * alpha + 0.1
-          lineColors[lineIdx * 3 + 2] = 0.96 * alpha + 0.1
+          lineColors[lineIdx * 3 + 0] = g
+          lineColors[lineIdx * 3 + 1] = g
+          lineColors[lineIdx * 3 + 2] = g
           lineIdx++
         }
       }
@@ -107,8 +109,8 @@ function Nodes() {
           />
         </bufferGeometry>
         <pointsMaterial
-          size={0.09}
-          color="#60a5fa"
+          size={0.11}
+          color="#ffffff"
           sizeAttenuation
           transparent
           opacity={0.95}

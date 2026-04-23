@@ -192,57 +192,87 @@ export default function LandingPage({ isAdmin }) {
   return (
     <div className="-m-4 sm:-m-6 lg:-m-8">
       {/* ─── Hero ────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-surface-900 via-surface-800 to-brand-900 text-white">
-        {/* subtle grid */}
+      <section className="relative overflow-hidden bg-black text-white">
+        {/* Ambient light pools behind the logo — pure monochrome, no brand-blue */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-24 -left-24 w-[520px] h-[520px] rounded-full bg-white/5 blur-3xl" />
+          <div className="absolute top-1/3 -right-32 w-[560px] h-[560px] rounded-full bg-white/5 blur-3xl" />
+        </div>
+
+        {/* Subtle grid — low-contrast white ruler lines */}
         <div
-          className="absolute inset-0 opacity-20"
+          className="absolute inset-0 opacity-[0.07]"
           style={{
             backgroundImage:
-              'linear-gradient(rgba(96,165,250,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(96,165,250,0.15) 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
+              'linear-gradient(rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.6) 1px, transparent 1px)',
+            backgroundSize: '64px 64px',
           }}
         />
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-16 lg:py-24 grid lg:grid-cols-2 gap-10 items-center">
-          {/* Left: huge logo + text */}
-          <div>
-            <div className="inline-flex items-center justify-center rounded-[2rem] overflow-hidden bg-white p-6 mb-8 shadow-2xl shadow-brand-500/30 ring-1 ring-white/20"
-              style={{ width: 'min(420px, 80vw)', height: 'min(420px, 80vw)' }}>
-              <img src="./ebs-logo.png" alt="EBS Department" className="w-full h-full object-contain" />
-            </div>
-            <div className="text-xs tracking-widest text-brand-300 uppercase font-semibold mb-3">EBS Department</div>
-            <EditableText
-              value={content.hero_title}
-              isAdmin={isAdmin}
-              onSave={v => saveContent('hero_title', v)}
-              className="text-4xl lg:text-5xl xl:text-6xl font-bold font-display leading-tight mb-4"
-              as="h1"
-            />
-            <EditableText
-              value={content.hero_subtitle}
-              isAdmin={isAdmin}
-              onSave={v => saveContent('hero_subtitle', v)}
-              className="text-lg lg:text-xl text-surface-300 mb-8"
-              as="p"
-            />
-            <button
-              onClick={() => navigate('/projects')}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-brand-500 hover:bg-brand-400 text-white rounded-xl font-medium text-sm shadow-lg shadow-brand-500/30 transition-colors"
-            >
-              Explore Projects <ArrowRight size={16} />
-            </button>
+
+        {/* Particle network fills the full hero as a backdrop */}
+        <div className="absolute inset-0 opacity-40 mix-blend-screen">
+          <Suspense fallback={null}>
+            <ParticleNetwork />
+          </Suspense>
+        </div>
+
+        <div className="relative max-w-6xl mx-auto px-6 lg:px-8 py-20 lg:py-28 flex flex-col items-center text-center">
+          {/* Eyebrow rule + label */}
+          <div className="flex items-center gap-3 mb-10 text-white/60">
+            <span className="h-px w-10 bg-white/30" />
+            <span className="text-[11px] tracking-[0.35em] uppercase font-semibold">EBS Department</span>
+            <span className="h-px w-10 bg-white/30" />
           </div>
 
-          {/* Right: 3D animation */}
-          <div className="h-80 lg:h-[420px] relative">
-            <Suspense
-              fallback={
-                <div className="w-full h-full flex items-center justify-center">
-                  <div className="w-10 h-10 border-4 border-brand-400 border-t-transparent rounded-full animate-spin" />
-                </div>
-              }
-            >
-              <ParticleNetwork />
-            </Suspense>
+          {/* Logo — generous white plate. Hard-edged to mirror the mark's own geometry; subtle ring, soft halo, no excess chrome. */}
+          <div
+            className="relative bg-white rounded-3xl flex items-center justify-center p-8 sm:p-10 mb-12 ring-1 ring-white/10"
+            style={{
+              width: 'min(440px, 82vw)',
+              aspectRatio: '1 / 1',
+              boxShadow:
+                '0 40px 80px -20px rgba(0,0,0,0.9), 0 0 80px -10px rgba(255,255,255,0.08)',
+            }}
+          >
+            <img src="./ebs-logo.png" alt="EBS" className="w-full h-full object-contain" />
+          </div>
+
+          {/* Title */}
+          <EditableText
+            value={content.hero_title}
+            isAdmin={isAdmin}
+            onSave={v => saveContent('hero_title', v)}
+            className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-bold font-display leading-[1.05] tracking-tight max-w-4xl"
+            as="h1"
+          />
+
+          {/* Subtitle */}
+          <EditableText
+            value={content.hero_subtitle}
+            isAdmin={isAdmin}
+            onSave={v => saveContent('hero_subtitle', v)}
+            className="text-base sm:text-lg text-white/65 mt-6 max-w-2xl"
+            as="p"
+          />
+
+          {/* CTA — inverted high-contrast, echoes the logo's B&W aesthetic */}
+          <button
+            onClick={() => navigate('/projects')}
+            className="mt-10 group inline-flex items-center gap-3 pl-6 pr-4 py-3 bg-white text-black rounded-full font-semibold text-sm tracking-tight hover:bg-white/90 transition-all"
+          >
+            Explore Projects
+            <span className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center transition-transform group-hover:translate-x-0.5">
+              <ArrowRight size={15} />
+            </span>
+          </button>
+
+          {/* Secondary — small caption for additional weight */}
+          <div className="mt-14 flex items-center gap-6 text-[11px] uppercase tracking-[0.25em] text-white/35">
+            <span>Enterprise Systems</span>
+            <span className="w-1 h-1 rounded-full bg-white/40" />
+            <span>Integrations</span>
+            <span className="w-1 h-1 rounded-full bg-white/40" />
+            <span>Analytics</span>
           </div>
         </div>
       </section>
