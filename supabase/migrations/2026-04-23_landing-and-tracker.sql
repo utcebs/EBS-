@@ -3,8 +3,16 @@
 -- Date: 2026-04-23
 -- ============================================================
 -- Run in Supabase SQL Editor.
--- Also: Create Storage bucket `team-photos` (public read, authenticated write)
---       manually in Supabase Dashboard → Storage.
+--
+-- Prerequisites: `profiles` and `priority_tasks` must already exist
+-- (they're created by COMBINED_SETUP.sql). This migration:
+--   • Creates `landing_page_content` from scratch (no deps on user tables).
+--   • Extends `profiles` with team-section columns (skipped if missing).
+--   • Extends `priority_tasks` with on-hold columns (skipped if missing).
+-- Missing tables will raise a NOTICE in the output, not an ERROR.
+--
+-- Also: Create Storage bucket `team-photos` (public read, authenticated
+--       write) manually in Supabase Dashboard → Storage.
 -- ============================================================
 
 -- A. Landing page content — singleton row, admin-editable
@@ -37,29 +45,51 @@ DROP POLICY IF EXISTS "admin_update_landing" ON landing_page_content;
 CREATE POLICY "admin_update_landing" ON landing_page_content
   FOR UPDATE USING (auth.role() = 'authenticated');
 
+
 -- B. Extend profiles for team section on landing page
 -- ============================================================
-ALTER TABLE profiles
-  ADD COLUMN IF NOT EXISTS avatar_url TEXT,
-  ADD COLUMN IF NOT EXISTS job_title TEXT,
-  ADD COLUMN IF NOT EXISTS bio TEXT,
-  ADD COLUMN IF NOT EXISTS display_order INT,
-  ADD COLUMN IF NOT EXISTS show_on_landing BOOLEAN DEFAULT false,
-  ADD COLUMN IF NOT EXISTS is_team_lead BOOLEAN DEFAULT false;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'profiles'
+  ) THEN
+    ALTER TABLE profiles
+      ADD COLUMN IF NOT EXISTS avatar_url TEXT,
+      ADD COLUMN IF NOT EXISTS job_title TEXT,
+      ADD COLUMN IF NOT EXISTS bio TEXT,
+      ADD COLUMN IF NOT EXISTS display_order INT,
+      ADD COLUMN IF NOT EXISTS show_on_landing BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS is_team_lead BOOLEAN DEFAULT false;
+    RAISE NOTICE 'profiles: landing-page columns added (or already present)';
+  ELSE
+    RAISE NOTICE 'SKIPPED: profiles table does not exist in schema public. Run COMBINED_SETUP.sql first, then re-run this migration.';
+  END IF;
+END$$;
+
 
 -- C. Extend priority_tasks for on-hold status + reason
 -- ============================================================
-ALTER TABLE priority_tasks
-  DROP CONSTRAINT IF EXISTS priority_tasks_status_check;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_catalog.pg_tables
+    WHERE schemaname = 'public' AND tablename = 'priority_tasks'
+  ) THEN
+    ALTER TABLE priority_tasks DROP CONSTRAINT IF EXISTS priority_tasks_status_check;
+    ALTER TABLE priority_tasks
+      ADD CONSTRAINT priority_tasks_status_check
+        CHECK (status IN ('pending', 'on_hold', 'done', 'logged'));
+    ALTER TABLE priority_tasks
+      ADD COLUMN IF NOT EXISTS hold_reason TEXT,
+      ADD COLUMN IF NOT EXISTS hold_set_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS hold_set_by UUID REFERENCES auth.users(id);
+    RAISE NOTICE 'priority_tasks: on-hold columns + constraint added (or already present)';
+  ELSE
+    RAISE NOTICE 'SKIPPED: priority_tasks table does not exist in schema public. Run COMBINED_SETUP.sql first, then re-run this migration.';
+  END IF;
+END$$;
 
-ALTER TABLE priority_tasks
-  ADD CONSTRAINT priority_tasks_status_check
-    CHECK (status IN ('pending', 'on_hold', 'done', 'logged'));
-
-ALTER TABLE priority_tasks
-  ADD COLUMN IF NOT EXISTS hold_reason TEXT,
-  ADD COLUMN IF NOT EXISTS hold_set_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS hold_set_by UUID REFERENCES auth.users(id);
 
 -- ============================================================
 -- Manual post-steps (do in Supabase Dashboard):
