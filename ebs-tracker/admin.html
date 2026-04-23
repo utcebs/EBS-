@@ -511,18 +511,20 @@
       <!-- Summary Cards -->
       <div id="projAnalyticsSummary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:24px;"></div>
 
-      <!-- Per-Project Table -->
+      <!-- Hours by Project (horizontal bar) -->
       <div class="card" style="margin-bottom:20px;">
         <div class="card-title-lg">📁 Hours by Project</div>
-        <div class="table-wrapper" id="projByProjectTable">
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Click a bar to see all logs for that project.</div>
+        <div id="projByProjectChartWrap" style="position:relative;min-height:240px;">
           <div class="loading"><div class="spinner"></div> Loading…</div>
         </div>
       </div>
 
-      <!-- Per-Employee-Per-Project Table -->
+      <!-- Employee Involvement by Project (stacked bar) -->
       <div class="card">
         <div class="card-title-lg">👤 Employee Involvement by Project</div>
-        <div class="table-wrapper" id="projByEmployeeTable">
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Each project's bar is split by employee. Click a segment to see that employee's logs on that project.</div>
+        <div id="projByEmployeeChartWrap" style="position:relative;min-height:280px;">
           <div class="loading"><div class="spinner"></div> Loading…</div>
         </div>
       </div>
@@ -689,6 +691,25 @@
     <div style="display:flex;gap:12px;justify-content:flex-end;">
       <button class="btn btn-secondary" onclick="closeAdminEdit()">Cancel</button>
       <button class="btn btn-primary" onclick="saveAdminEdit()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Project Analytics Drill-Down Modal ── -->
+<div class="modal-backdrop" id="projDrillModal" onclick="if(event.target===this)closeProjAnalyticsDrill()">
+  <div class="modal" style="max-width:880px;">
+    <div class="modal-header">
+      <div>
+        <h2 class="modal-title" id="projDrillTitle">—</h2>
+        <div id="projDrillSubtitle" style="font-size:12px;color:var(--text-3);margin-top:4px;">—</div>
+      </div>
+      <button class="modal-close" onclick="closeProjAnalyticsDrill()">✕</button>
+    </div>
+    <div class="table-wrapper" id="projDrillBody" style="max-height:60vh;overflow:auto;">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-secondary" onclick="closeProjAnalyticsDrill()">Close</button>
     </div>
   </div>
 </div>
@@ -2121,42 +2142,45 @@ async function saveProjectLinkMandatory(checked) {
 }
 
 // ── Project Analytics ───────────────────────────────────────────
+// Chart instances cached so we can destroy before re-render
+let projAnalyticsCharts = { byProject: null, involvement: null };
+// Full log dataset kept in memory for drill-down
+let projAnalyticsLogs = [];
+let projAnalyticsProjMap = {};
+
 async function loadProjectAnalytics() {
-  const summaryEl     = document.getElementById('projAnalyticsSummary');
-  const byProjEl      = document.getElementById('projByProjectTable');
-  const byEmployeeEl  = document.getElementById('projByEmployeeTable');
+  const summaryEl = document.getElementById('projAnalyticsSummary');
+  const byProjWrap = document.getElementById('projByProjectChartWrap');
+  const byEmpWrap  = document.getElementById('projByEmployeeChartWrap');
   if (!summaryEl) return;
 
-  summaryEl.innerHTML    = '<div class="loading"><div class="spinner"></div> Loading…</div>';
-  byProjEl.innerHTML     = '<div class="loading"><div class="spinner"></div></div>';
-  byEmployeeEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  summaryEl.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+  byProjWrap.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  byEmpWrap.innerHTML  = '<div class="loading"><div class="spinner"></div></div>';
 
-  // Fetch all task_logs that have a linked_project_id
-  const { data: logs } = await db
-    .from('task_logs')
-    .select('user_id, team_member, hours_spent, linked_project_id, profiles(full_name)')
-    .not('linked_project_id', 'is', null);
+  // Fetch all task_logs with a linked_project_id + projects for name lookup
+  const [{ data: logs }, { data: projects }] = await Promise.all([
+    db.from('task_logs')
+      .select('id, user_id, team_member, hours_spent, log_date, task_project, task_description, linked_project_id, profiles(full_name)')
+      .not('linked_project_id', 'is', null),
+    db.from('projects')
+      .select('proj_unique_id, project_name, project_number')
+      .order('project_number'),
+  ]);
 
-  // Fetch all projects for name lookup
-  const { data: projects } = await db
-    .from('projects')
-    .select('proj_unique_id, project_name, project_number')
-    .order('project_number');
-
-  const projMap = {};
-  (projects || []).forEach(p => { projMap[p.proj_unique_id] = p.project_name; });
-
-  const allLinked = logs || [];
+  projAnalyticsProjMap = {};
+  (projects || []).forEach(p => { projAnalyticsProjMap[p.proj_unique_id] = p.project_name; });
+  projAnalyticsLogs = logs || [];
 
   // ── Summary cards ─────────────────────────────────────────
-  const totalHours    = allLinked.reduce((s, l) => s + parseFloat(l.hours_spent || 0), 0);
-  const linkedProjects = [...new Set(allLinked.map(l => l.linked_project_id))].length;
-  const linkedEmployees = [...new Set(allLinked.map(l => l.user_id))].length;
+  const totalHours      = projAnalyticsLogs.reduce((s, l) => s + parseFloat(l.hours_spent || 0), 0);
+  const linkedProjects  = [...new Set(projAnalyticsLogs.map(l => l.linked_project_id))].length;
+  const linkedEmployees = [...new Set(projAnalyticsLogs.map(l => l.user_id))].length;
   summaryEl.innerHTML = [
-    { label: 'Total Hours Logged', value: totalHours.toFixed(1) + 'h', icon: '⏱️' },
-    { label: 'Projects with Logs', value: linkedProjects, icon: '📁' },
-    { label: 'Employees Involved', value: linkedEmployees, icon: '👥' },
-    { label: 'Total Task Entries', value: allLinked.length, icon: '📋' },
+    { label: 'Total Hours Logged',  value: totalHours.toFixed(1) + 'h', icon: '⏱️' },
+    { label: 'Projects with Logs',  value: linkedProjects,               icon: '📁' },
+    { label: 'Employees Involved',  value: linkedEmployees,              icon: '👥' },
+    { label: 'Total Task Entries',  value: projAnalyticsLogs.length,     icon: '📋' },
   ].map(c => `
     <div style="background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-lg);padding:16px;">
       <div style="font-size:22px;margin-bottom:6px;">${c.icon}</div>
@@ -2164,55 +2188,177 @@ async function loadProjectAnalytics() {
       <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${c.label}</div>
     </div>`).join('');
 
-  // ── By Project table ──────────────────────────────────────
+  if (!projAnalyticsLogs.length) {
+    byProjWrap.innerHTML = '<div style="padding:20px;color:var(--text-3);font-size:13px;text-align:center;">No linked task logs yet. Employees need to select a project when logging tasks.</div>';
+    byEmpWrap.innerHTML  = '<div style="padding:20px;color:var(--text-3);font-size:13px;text-align:center;">No data yet.</div>';
+    return;
+  }
+
+  // ── Chart 1: Hours by Project (horizontal bars) ──────────
   const byProj = {};
-  allLinked.forEach(l => {
-    const pid  = l.linked_project_id;
-    const name = projMap[pid] || pid;
-    if (!byProj[pid]) byProj[pid] = { name, hours: 0, employees: new Set(), logs: 0 };
+  projAnalyticsLogs.forEach(l => {
+    const pid = l.linked_project_id;
+    if (!byProj[pid]) byProj[pid] = { pid, name: projAnalyticsProjMap[pid] || pid, hours: 0 };
     byProj[pid].hours += parseFloat(l.hours_spent || 0);
-    byProj[pid].employees.add(l.user_id);
-    byProj[pid].logs++;
+  });
+  const projBars = Object.values(byProj).sort((a, b) => b.hours - a.hours);
+
+  byProjWrap.innerHTML = `<canvas id="hoursByProjectChart" style="max-height:${Math.max(240, projBars.length * 34)}px;"></canvas>`;
+  const ctx1 = document.getElementById('hoursByProjectChart').getContext('2d');
+
+  if (projAnalyticsCharts.byProject) projAnalyticsCharts.byProject.destroy();
+  projAnalyticsCharts.byProject = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: projBars.map(p => p.name.length > 40 ? p.name.slice(0, 37) + '…' : p.name),
+      datasets: [{
+        label: 'Hours',
+        data:  projBars.map(p => Math.round(p.hours * 10) / 10),
+        backgroundColor: projBars.map((_, i) => CHART_COLORS[i % CHART_COLORS.length] + 'cc'),
+        borderColor:     projBars.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+        borderWidth: 1,
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: (_e, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const proj = projBars[idx];
+        openProjAnalyticsDrill({
+          title: `📁 ${proj.name}`,
+          subtitle: `${proj.hours.toFixed(1)} hours total`,
+          logs: projAnalyticsLogs.filter(l => l.linked_project_id === proj.pid),
+        });
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.parsed.x} h`,
+          },
+        },
+      },
+      scales: {
+        x: { beginAtZero: true, ticks: { color: 'rgba(148,163,184,0.8)' }, grid: { color: 'rgba(148,163,184,0.1)' }, title: { display: true, text: 'Hours', color: 'rgba(148,163,184,0.8)' } },
+        y: { ticks: { color: 'rgba(148,163,184,0.8)', font: { size: 11 } }, grid: { display: false } },
+      },
+    },
   });
 
-  const projRows = Object.values(byProj).sort((a, b) => b.hours - a.hours);
-  byProjEl.innerHTML = projRows.length ? `
-    <table><thead><tr>
-      <th>Project</th><th>Total Hours</th><th>Employees</th><th>Log Entries</th>
-    </tr></thead><tbody>
-      ${projRows.map(p => `<tr>
-        <td><strong>${p.name}</strong></td>
-        <td><strong>${p.hours.toFixed(1)}h</strong></td>
-        <td>${p.employees.size}</td>
-        <td>${p.logs}</td>
-      </tr>`).join('')}
-    </tbody></table>`
-    : '<div style="padding:20px;color:var(--text-3);font-size:13px;">No linked task logs yet. Employees need to select a project when logging tasks.</div>';
+  // ── Chart 2: Employee Involvement by Project (stacked bars) ──
+  // X axis: projects; each bar = stack of employee contributions
+  const empSet = new Set();
+  projAnalyticsLogs.forEach(l => empSet.add(l.profiles?.full_name || l.team_member || l.user_id));
+  const employees = [...empSet].sort();
+  const projectKeys = projBars.map(p => p.pid);
 
-  // ── By Employee × Project table ───────────────────────────
-  const empProj = {};
-  allLinked.forEach(l => {
-    const emp  = l.profiles?.full_name || l.team_member || l.user_id;
-    const proj = projMap[l.linked_project_id] || l.linked_project_id;
-    const key  = emp + '||' + proj;
-    if (!empProj[key]) empProj[key] = { emp, proj, hours: 0, logs: 0 };
-    empProj[key].hours += parseFloat(l.hours_spent || 0);
-    empProj[key].logs++;
+  // employee × project matrix
+  const matrix = {};  // matrix[empName][projId] = { hours, userId }
+  employees.forEach(e => { matrix[e] = {}; projectKeys.forEach(pid => matrix[e][pid] = { hours: 0, userId: null }); });
+  projAnalyticsLogs.forEach(l => {
+    const emp = l.profiles?.full_name || l.team_member || l.user_id;
+    if (!matrix[emp]) return;
+    if (!matrix[emp][l.linked_project_id]) matrix[emp][l.linked_project_id] = { hours: 0, userId: l.user_id };
+    matrix[emp][l.linked_project_id].hours += parseFloat(l.hours_spent || 0);
+    matrix[emp][l.linked_project_id].userId = l.user_id;
   });
 
-  const empRows = Object.values(empProj).sort((a, b) => a.emp.localeCompare(b.emp) || b.hours - a.hours);
-  byEmployeeEl.innerHTML = empRows.length ? `
-    <table><thead><tr>
-      <th>Employee</th><th>Project</th><th>Hours Logged</th><th>Log Entries</th>
-    </tr></thead><tbody>
-      ${empRows.map(r => `<tr>
-        <td><strong>${r.emp}</strong></td>
-        <td>${r.proj}</td>
-        <td><strong>${r.hours.toFixed(1)}h</strong></td>
-        <td>${r.logs}</td>
-      </tr>`).join('')}
-    </tbody></table>`
-    : '<div style="padding:20px;color:var(--text-3);font-size:13px;">No data yet.</div>';
+  byEmpWrap.innerHTML = `<canvas id="involvementChart" style="max-height:${Math.max(280, projectKeys.length * 44)}px;"></canvas>`;
+  const ctx2 = document.getElementById('involvementChart').getContext('2d');
+
+  if (projAnalyticsCharts.involvement) projAnalyticsCharts.involvement.destroy();
+  projAnalyticsCharts.involvement = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: projBars.map(p => p.name.length > 40 ? p.name.slice(0, 37) + '…' : p.name),
+      datasets: employees.map((emp, i) => ({
+        label: emp,
+        data:  projectKeys.map(pid => Math.round((matrix[emp][pid]?.hours || 0) * 10) / 10),
+        backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + 'cc',
+        borderColor:     CHART_COLORS[i % CHART_COLORS.length],
+        borderWidth: 1,
+        borderRadius: 4,
+      })),
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: (_e, elements) => {
+        if (!elements.length) return;
+        const el = elements[0];
+        const emp = employees[el.datasetIndex];
+        const pid = projectKeys[el.index];
+        const projName = projAnalyticsProjMap[pid] || pid;
+        const drillLogs = projAnalyticsLogs.filter(l =>
+          l.linked_project_id === pid &&
+          (l.profiles?.full_name || l.team_member || l.user_id) === emp
+        );
+        const drillHours = drillLogs.reduce((s, l) => s + parseFloat(l.hours_spent || 0), 0);
+        openProjAnalyticsDrill({
+          title: `👤 ${emp} on ${projName}`,
+          subtitle: `${drillHours.toFixed(1)} hours · ${drillLogs.length} log entries`,
+          logs: drillLogs,
+        });
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { color: 'rgba(148,163,184,0.9)', boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x} h`,
+          },
+        },
+      },
+      scales: {
+        x: { stacked: true, beginAtZero: true, ticks: { color: 'rgba(148,163,184,0.8)' }, grid: { color: 'rgba(148,163,184,0.1)' }, title: { display: true, text: 'Hours', color: 'rgba(148,163,184,0.8)' } },
+        y: { stacked: true, ticks: { color: 'rgba(148,163,184,0.8)', font: { size: 11 } }, grid: { display: false } },
+      },
+    },
+  });
+}
+
+// Palette for charts above (reuse if defined elsewhere)
+const CHART_COLORS = [
+  '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#84cc16',
+  '#a855f7', '#3b82f6',
+];
+
+// ── Drill-down modal for project analytics ────────────────
+function openProjAnalyticsDrill({ title, subtitle, logs }) {
+  const modal = document.getElementById('projDrillModal');
+  document.getElementById('projDrillTitle').textContent = title;
+  document.getElementById('projDrillSubtitle').textContent = subtitle;
+
+  const body = document.getElementById('projDrillBody');
+  if (!logs.length) {
+    body.innerHTML = '<div style="padding:20px;color:var(--text-3);font-size:13px;text-align:center;">No logs.</div>';
+  } else {
+    const sorted = [...logs].sort((a, b) => (a.log_date < b.log_date ? 1 : -1));
+    body.innerHTML = `
+      <table><thead><tr>
+        <th>Date</th><th>Employee</th><th>Task</th><th>Hours</th>
+      </tr></thead><tbody>
+        ${sorted.map(l => `<tr>
+          <td style="white-space:nowrap;">${l.log_date || '—'}</td>
+          <td>${(l.profiles?.full_name || l.team_member || '—').replace(/</g,'&lt;')}</td>
+          <td>
+            <strong>${(l.task_project || '—').replace(/</g,'&lt;')}</strong>
+            ${l.task_description ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px;">${l.task_description.replace(/</g,'&lt;')}</div>` : ''}
+          </td>
+          <td><strong>${parseFloat(l.hours_spent || 0).toFixed(1)}h</strong></td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  modal.classList.add('open');
+}
+function closeProjAnalyticsDrill() {
+  document.getElementById('projDrillModal').classList.remove('open');
 }
 
 init();
