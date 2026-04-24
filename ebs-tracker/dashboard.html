@@ -240,7 +240,7 @@
   async function loadLogs() {
     const { data, error } = await db
       .from('task_logs')
-      .select('*, profiles(full_name)')
+      .select('*, profiles!user_id(full_name)')
       .order('log_date', { ascending: false })
       .order('created_at', { ascending: false });
     if (error) { console.error(error); showToast('Failed to load logs', 'error'); return; }

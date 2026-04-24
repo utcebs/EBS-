@@ -778,7 +778,10 @@ async function loadUsers() {
 }
 
 async function loadAllLogs() {
-  const { data } = await db.from('task_logs').select('*, profiles(full_name)').order('log_date', { ascending: false });
+  // Disambiguate the profiles join — task_logs has two FKs to profiles
+  // (user_id and approved_by from the 2026-04-25 migration). Using the
+  // column-name hint picks the user_id relationship.
+  const { data } = await db.from('task_logs').select('*, profiles!user_id(full_name)').order('log_date', { ascending: false });
   allLogs = data || [];
 }
 
@@ -1572,7 +1575,7 @@ async function loadApprovalsTab() {
   let pending = [];
   try {
     const { data, error } = await db.from('task_logs')
-      .select('id, log_date, task_project, accomplishment, hours_spent, user_id, profiles(full_name)')
+      .select('id, log_date, task_project, accomplishment, hours_spent, user_id, profiles!user_id(full_name)')
       .eq('accomplishment_status', 'pending')
       .order('log_date', { ascending: false });
     if (error) throw error;
@@ -2611,7 +2614,7 @@ async function loadProjectAnalytics() {
   // Fetch all task_logs with a linked_project_id + projects for name lookup
   const [{ data: logs }, { data: projects }] = await Promise.all([
     db.from('task_logs')
-      .select('id, user_id, team_member, hours_spent, log_date, task_project, task_description, linked_project_id, profiles(full_name)')
+      .select('id, user_id, team_member, hours_spent, log_date, task_project, task_description, linked_project_id, profiles!user_id(full_name)')
       .not('linked_project_id', 'is', null),
     db.from('projects')
       .select('proj_unique_id, project_name, project_number')

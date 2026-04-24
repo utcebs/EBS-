@@ -1226,7 +1226,7 @@ function ProjectDetail() {
       if (p?.proj_unique_id) {
         const { data: logs, error: le } = await supabasePublic
           .from('task_logs')
-          .select('user_id, team_member, hours_spent, log_date, task_project, task_description, profiles(id, full_name, avatar_url)')
+          .select('user_id, team_member, hours_spent, log_date, task_project, task_description, profiles!user_id(id, full_name, avatar_url)')
           .eq('linked_project_id', p.proj_unique_id)
         if (le) console.error('Task logs fetch error:', le)
         else setHourLogs(logs || [])
