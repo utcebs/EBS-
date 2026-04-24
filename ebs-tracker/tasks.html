@@ -119,9 +119,12 @@
       <div class="status-chip-row" id="statusChipRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
     </div>
 
-    <!-- Admin: assigned-task analytics card. Visible only when role=admin AND
-         the status filter is on completion-related views ('done', 'logged', 'all'). -->
+    <!-- Admin: assigned-task analytics card. Always visible to admins. -->
     <div id="assignedAnalyticsCard" style="display:none;margin-bottom:20px;"></div>
+
+    <!-- Admin: per-employee assigned-task dashboard. One collapsible card per
+         employee with at least one assigned task. Always visible to admins. -->
+    <div id="assignedByEmployee" style="display:none;margin-bottom:24px;"></div>
 
     <!-- Summary stat pills -->
     <div id="statPills" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;"></div>
@@ -331,6 +334,13 @@
       <label class="form-label">Due Date</label>
       <input type="date" id="assignTaskDue" class="form-control" />
     </div>
+    <div class="form-group">
+      <label class="form-label">🔗 Link to Project</label>
+      <select id="assignTaskLinkedProject" class="form-control">
+        <option value="">-- Select a project (optional) --</option>
+      </select>
+      <div class="form-hint">When the user logs against this task, the project is pre-selected.</div>
+    </div>
     <div id="assignTaskError" class="login-error" style="margin-bottom:12px;"></div>
     <div style="display:flex;gap:12px;justify-content:flex-end;">
       <button class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
@@ -403,7 +413,7 @@ async function init() {
 }
 
 async function loadUsers() {
-  const { data } = await db.from('profiles').select('id, full_name').order('full_name');
+  const { data } = await db.from('profiles').select('id, full_name, avatar_url').order('full_name');
   allUsers = data || [];
 }
 
@@ -474,15 +484,17 @@ function renderStatusChips() {
 }
 
 // ── Admin assigned-task analytics ─────────────────────────
-// Visible only when role=admin AND statusFilter ∈ {done, logged, all}.
+// Always visible to admins (regardless of status filter) so a freshly-
+// assigned overdue task surfaces immediately. Pool already includes every
+// status, so the KPIs reflect the live state.
 // Computes on-time / late / avg-delay / overdue-still-open from done_at +
-// due_date. done_at is stamped by the Mark-Done button or by the Move-to-Log
-// flow when isCompleted is checked. Only assigned tasks (assigned_by NOT NULL)
-// are counted, since the analytics is about what the admin handed out.
+// due_date. done_at is stamped by the Move-to-Log flow when isCompleted is
+// checked. Only assigned tasks (assigned_by NOT NULL) are counted, since
+// the analytics is about what the admin handed out.
 function renderAssignedAnalytics() {
   const card = document.getElementById('assignedAnalyticsCard');
   if (!card) return;
-  if (session.role !== 'admin' || !['done','logged','all'].includes(statusFilter)) {
+  if (session.role !== 'admin') {
     card.style.display = 'none';
     return;
   }
@@ -501,6 +513,8 @@ function renderAssignedAnalytics() {
   });
   const avgDelay = late.length ? Math.round((totalDelayDays / late.length) * 10) / 10 : 0;
   const overdueOpen = pool.filter(t => t.status !== 'done' && t.status !== 'logged' && t.due_date && new Date(t.due_date) < today);
+  // Active & on track: not closed, and either no due date or due date is today/future
+  const activeOnTrack = pool.filter(t => t.status !== 'done' && t.status !== 'logged' && (!t.due_date || new Date(t.due_date) >= today));
 
   // Per-assignee breakdown
   const byUser = {};
@@ -535,6 +549,10 @@ function renderAssignedAnalytics() {
           <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Total Assigned</div>
           <div style="font-size:24px;font-weight:800;margin-top:4px;">${pool.length}</div>
         </div>
+        <div style="padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid #60a5fa;border-radius:var(--radius-lg);">
+          <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Active · On Track</div>
+          <div style="font-size:24px;font-weight:800;color:#60a5fa;margin-top:4px;">${activeOnTrack.length}</div>
+        </div>
         <div style="padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid var(--success);border-radius:var(--radius-lg);">
           <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;">On Time</div>
           <div style="font-size:24px;font-weight:800;color:var(--success);margin-top:4px;">${onTime.length}</div>
@@ -563,6 +581,107 @@ function renderAssignedAnalytics() {
               </div>`).join('')}`
           : '<div style="font-size:12px;color:var(--text-3);">No assignees with closed tasks yet.</div>'}
       </div>
+    </div>`;
+}
+
+// ── Admin per-employee assigned-task dashboard ─────────────
+// One collapsible card per employee with at least one assigned task.
+// Open by default for the user currently filtered in the user-tab strip
+// ('all' opens none); collapsed otherwise.
+const _empOpen = new Set(); // user_id set of expanded cards
+
+function toggleEmpCard(uid) {
+  if (_empOpen.has(uid)) _empOpen.delete(uid);
+  else _empOpen.add(uid);
+  renderAssignedByEmployee();
+}
+
+function renderAssignedByEmployee() {
+  const host = document.getElementById('assignedByEmployee');
+  if (!host) return;
+  if (session.role !== 'admin') { host.style.display = 'none'; return; }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const assigned = allTasks.filter(t => t.assigned_by);
+  if (!assigned.length) { host.style.display = 'none'; return; }
+
+  // Group by user_id
+  const byUser = {};
+  assigned.forEach(t => {
+    const uid = t.user_id;
+    if (!byUser[uid]) {
+      const u = allUsers.find(x => x.id === uid);
+      byUser[uid] = {
+        id: uid,
+        name: u?.full_name || '—',
+        avatar: u?.avatar_url || null,
+        all: [], active: [], overdue: [], done: [],
+      };
+    }
+    byUser[uid].all.push(t);
+    const closed = t.status === 'done' || t.status === 'logged';
+    if (closed) byUser[uid].done.push(t);
+    else if (t.due_date && new Date(t.due_date) < today) byUser[uid].overdue.push(t);
+    else byUser[uid].active.push(t);
+  });
+  const employees = Object.values(byUser).sort((a,b) => b.all.length - a.all.length);
+
+  host.style.display = 'block';
+  host.innerHTML = `
+    <div style="font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">👥 Assigned Tasks · By Employee</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px;">
+      ${employees.map(e => renderEmpCard(e, today)).join('')}
+    </div>`;
+}
+
+function renderEmpCard(e, today) {
+  const initials = e.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+  const avatarInner = e.avatar
+    ? `<img src="${e.avatar}" alt="${e.name}" onerror="this.outerHTML='${initials}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
+    : initials;
+  const isOpen = _empOpen.has(e.id);
+
+  const taskRow = (t) => {
+    const overdueDays = (t.due_date && new Date(t.due_date) < today)
+      ? Math.floor((today - new Date(t.due_date)) / 86400000) : 0;
+    const dueLabel = !t.due_date ? '<span style="color:var(--text-3);font-size:11px;">No due date</span>'
+      : overdueDays > 0 ? `<span style="color:var(--p-urgent);font-size:11px;font-weight:700;">⚠️ Overdue ${overdueDays}d</span>`
+      : `<span style="color:var(--text-3);font-size:11px;">📅 ${formatDate(t.due_date)}</span>`;
+    const projectChip = t.linked_project_id
+      ? `<span style="font-size:10px;color:var(--text-3);background:var(--bg-surface);padding:1px 6px;border-radius:999px;border:1px solid var(--border);margin-left:6px;">🔗 ${t.linked_project_id}</span>`
+      : '';
+    const status = (t.status === 'done' || t.status === 'logged')
+      ? `<span style="color:var(--success);font-size:11px;font-weight:700;">✓ ${t.status}</span>`
+      : t.status === 'on_hold' ? `<span style="color:var(--warning);font-size:11px;font-weight:700;">🚧 on hold</span>`
+      : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;">
+      <span style="font-size:13px;">${PRIORITY_ICONS[t.priority] || ''}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;">${t.title}</span>
+      ${projectChip}
+      ${status}
+      ${dueLabel}
+    </div>`;
+  };
+
+  return `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <button onclick="toggleEmpCard('${e.id}')" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:12px;padding:14px 16px;width:100%;box-sizing:border-box;">
+        <div class="user-avatar" data-user-id="${e.id}" style="width:40px;height:40px;font-size:13px;flex-shrink:0;overflow:hidden;">${avatarInner}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:14px;">${e.name}</div>
+          <div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-top:2px;">
+            ${e.all.length} assigned · ${e.done.length} done${e.overdue.length ? ` · <span style="color:var(--p-urgent);">${e.overdue.length} overdue</span>` : ''}${e.active.length ? ` · ${e.active.length} active` : ''}
+          </div>
+        </div>
+        <span style="color:var(--text-3);font-size:14px;">${isOpen ? '▼' : '▶'}</span>
+      </button>
+      ${isOpen ? `
+        <div style="border-top:1px solid var(--border);">
+          ${e.overdue.length ? `<div style="padding:8px 16px;font-size:10px;font-weight:800;color:var(--p-urgent);text-transform:uppercase;letter-spacing:.06em;background:rgba(239,68,68,0.05);">⚠️ Overdue (${e.overdue.length})</div>${e.overdue.map(taskRow).join('')}` : ''}
+          ${e.active.length ? `<div style="padding:8px 16px;font-size:10px;font-weight:800;color:#60a5fa;text-transform:uppercase;letter-spacing:.06em;background:rgba(96,165,250,0.05);">🎯 Active (${e.active.length})</div>${e.active.map(taskRow).join('')}` : ''}
+          ${e.done.length ? `<div style="padding:8px 16px;font-size:10px;font-weight:800;color:var(--success);text-transform:uppercase;letter-spacing:.06em;background:rgba(34,197,94,0.05);">✓ Closed (${e.done.length})</div>${e.done.map(taskRow).join('')}` : ''}
+        </div>
+      ` : ''}
     </div>`;
 }
 
@@ -630,6 +749,7 @@ function dueDateLabel(due) {
 function renderBoard() {
   renderStatusChips();
   renderAssignedAnalytics();
+  renderAssignedByEmployee();
   const tasks = getVisibleTasks();
   // Split: my tasks vs assigned to me
   const myTasks       = tasks.filter(t => !t.assigned_by || t.user_id === session.id && !t.assigned_by);
@@ -816,7 +936,7 @@ function recalcLogModalWeek() {
   document.getElementById('logTaskWeek').value = getWeekNumber(d);
 }
 
-function openLogModal(id, title) {
+async function openLogModal(id, title) {
   loggingTaskId = id;
   const today = getTodayInfo();
   document.getElementById('logTaskTitle').value       = title;
@@ -848,7 +968,13 @@ function openLogModal(id, title) {
     sel.appendChild(group);
   });
 
-  ensureLogModalProjects();
+  // Wait for the project list to populate, then pre-select the project the
+  // admin linked at assign time (if any).
+  await ensureLogModalProjects();
+  const task = allTasks.find(t => t.id === id);
+  if (task?.linked_project_id) {
+    document.getElementById('logTaskLinkedProject').value = task.linked_project_id;
+  }
   document.getElementById('logModal').classList.add('open');
 }
 
@@ -995,11 +1121,30 @@ function openAssignModal() {
   document.getElementById('assignTaskTitle').value    = '';
   document.getElementById('assignTaskDue').value      = '';
   document.getElementById('assignTaskPriority').value = '';
+  document.getElementById('assignTaskLinkedProject').value = '';
   document.getElementById('assignTaskError').classList.remove('show');
   ['Urgent','Important','Medium','Low'].forEach(p => {
     document.getElementById('apick-'+p).className = 'priority-pick';
   });
+  ensureAssignModalProjects();
   document.getElementById('assignTaskModal').classList.add('open');
+}
+
+async function ensureAssignModalProjects() {
+  const sel = document.getElementById('assignTaskLinkedProject');
+  if (!sel || sel.dataset.loaded === '1') return;
+  const { data } = await db
+    .from('projects')
+    .select('proj_unique_id, project_name, project_number')
+    .order('project_number');
+  (data || []).forEach(p => {
+    if (!p.proj_unique_id) return;
+    const opt = document.createElement('option');
+    opt.value = p.proj_unique_id;
+    opt.textContent = p.project_name;
+    sel.appendChild(opt);
+  });
+  sel.dataset.loaded = '1';
 }
 function closeAssignModal() { document.getElementById('assignTaskModal').classList.remove('open'); }
 
@@ -1022,10 +1167,12 @@ async function saveAssignedTask() {
   if (!title)               { err.textContent = 'Task title is required'; err.classList.add('show'); return; }
   if (!selectedAssignPriority) { err.textContent = 'Select a priority'; err.classList.add('show'); return; }
   btn.disabled = true; btn.textContent = 'Assigning…';
+  const linkedProjectId = document.getElementById('assignTaskLinkedProject').value || null;
   const { error } = await db.from('priority_tasks').insert({
     user_id:     toUid,
     assigned_by: session.id,
-    title, priority: selectedAssignPriority, due_date: due, status: 'pending'
+    title, priority: selectedAssignPriority, due_date: due, status: 'pending',
+    linked_project_id: linkedProjectId,
   });
   if (error) { err.textContent = error.message; err.classList.add('show'); }
   else {
