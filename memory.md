@@ -407,3 +407,54 @@ Removed Streak KPI cards from `performance.html` + `admin.html` user-detail. Rem
 6. tasks.html admin filter on "Logged" or "Done" reveals the Analytics card; per-assignee breakdown expands.
 7. Badges tab: create "Century" (`total_hours >= 100`), Sync. Visit My Performance as a user with > 100h — the badge appears as EARNED. SQL: `SELECT * FROM user_badges WHERE badge_id = '<id>'` shows the row.
 - Supabase — auto-confirm trigger added; Confirm Email toggle OFF
+
+---
+
+## 15. Late-April follow-up — fixes + 3 small features
+
+A second pass after §14 shipped, mostly tightening what landed plus three new features the original plan didn't cover. Commits `6159453` → `7d1c34c`. Theme of the batch: **fix the bugs, fill the gaps, give admin tighter control over what's published**.
+
+### Schema migration: `2026-04-25_assigned-links-and-accomplishment-approval.sql`
+- `priority_tasks.linked_project_id TEXT REFERENCES projects(proj_unique_id) ON DELETE SET NULL`
+- `task_logs.accomplishment_status TEXT DEFAULT 'approved' CHECK IN ('pending','approved','rejected')`
+- `task_logs.approved_by UUID REFERENCES profiles(id)`, `approved_at TIMESTAMPTZ`, `rejection_reason TEXT`
+- Partial index `idx_task_logs_accomplishment_status` on the pending rows only
+- Default 'approved' so all existing rows stay visible and counted; client only sets 'pending' on new inserts where the user actually filled in an accomplishment.
+
+### Bugs fixed
+1. **`✓ Done` button removed** from task cards. Completion now only flows through Move-to-Log when "completed" is ticked. The button + its `markTaskDone()` were redundant with the log path and confusing the workflow.
+2. **Comparison page period selector dark-mode invisible-text bug** — the inline `<style>` block in `admin.html` had a duplicate `.comp-period-btn.active { background: var(--accent); color:#fff }`. With `--accent: #FFFFFF` in dark mode that's white-on-white. Fix: deleted the duplicate so `style.css`'s correct rule (white gradient + `#080600` text) drives it. Same fix applied to `.trend-btn.active`.
+3. **Assigned-tasks analytics card was hidden behind status filter** — only showed on `done`/`logged`/`all`. Fixed: always visible to admin so a freshly-assigned overdue task shows in `Overdue · Open` immediately. Added a fifth KPI **Active · On Track** for completeness.
+4. **Profile photos from landing page weren't flowing** to:
+   - `admin.html` All Users list + User Detail header (data was already loaded via `loadUsers()`'s `avatar_url` select, but the renderer only drew initials)
+   - React app `ProjectDetail` Hours-by-Employee cards (the `task_logs` query was selecting only `team_member` string, no profile join)
+   Both fixed: render `<img src="${u.avatar_url}">` with initials fallback. React side now joins `profiles(id, full_name, avatar_url)` and groups contributors by `user_id` (falls back to `team_member` for legacy rows).
+
+### New features
+5. **Project link on admin Assign-to-User modal** — optional `🔗 Link to Project` dropdown. When the user later clicks Move-to-Log on that task, the linked project is pre-selected so they don't have to pick again. Lazy-loads via `ensureAssignModalProjects()`. Saves to `priority_tasks.linked_project_id`.
+6. **Per-employee assigned-task dashboard** in `tasks.html` admin view — one collapsible card per employee with at least one assigned task. Header shows avatar + counts (`assigned · done · overdue · active`). Expanding reveals the task list grouped by Overdue → Active → Closed; each row has priority icon, title, project chip, status, and a red `Overdue Nd` badge if past due. Lives below the analytics card. Module-scope Set tracks open cards across renders.
+7. **Key Accomplishment approval workflow** — when a user types an accomplishment in `log.html` or `tasks.html`'s log modal, the `task_logs` row inserts with `accomplishment_status='pending'`. Hours and category count immediately (no holding), but the accomplishment text is replaced by `🕒 Pending admin approval` everywhere it's displayed (via the new `displayAccomplishment(log)` helper in `utils.js`) and is excluded from `calculateStats().accomplishmentCount`. New "🕒 Pending Approvals" admin tab between Records and Comparison shows pending entries with Approve / Reject (with reason) actions; tab title carries a count badge that refreshes after every action and on initial admin load. Admin Edit modal in Records auto-approves on save (admin editing implies admin approval).
+
+### Files touched
+- `ebs-tracker/tasks.html` — drop ✓ Done, project dropdown on assign, always-on analytics + Active KPI, per-employee dashboard, accomplishment_status='pending' on insert, openLogModal pre-selects task.linked_project_id
+- `ebs-tracker/admin.html` — fix .comp-period-btn duplicate CSS, swap All Users + User Detail avatars to img, new Pending Approvals tab + handlers + count badge, Records / drill-down show pending pill, admin edit auto-approves
+- `ebs-tracker/log.html` — accomplishment_status='pending' on insert when accomplishment filled
+- `ebs-tracker/dashboard.html` — pending text hidden via displayAccomplishment helper
+- `ebs-tracker/js/utils.js` — `displayAccomplishment` helper, `calculateStats` counts only approved
+- `src/App.jsx` — ProjectDetail query fetches profiles join, contributors group by user_id, render avatar img
+- `supabase/migrations/2026-04-25_assigned-links-and-accomplishment-approval.sql` (new)
+
+### Verification (run after applying the 2026-04-25 SQL)
+1. tasks.html admin view: no `✓ Done` button on any card. Move-to-Log with "completed" ticked still flips status correctly.
+2. Comparison tab in dark mode: click "By Month" → label is **legible** (dark text on white gradient). Same in light mode (light text on brown gradient).
+3. admin.html All Users + User Detail: each user shows their landing-page photo. React `/#/projects/<id>` Hours-by-Employee cards: same.
+4. Assign a task with project linked → user opens Move-to-Log → project pre-selected.
+5. Analytics card visible on every status filter; assign a 5-day-overdue task → `Overdue · Open` increments immediately.
+6. Per-employee dashboard appears below analytics. Expand a card → tasks grouped by Overdue / Active / Closed.
+7. As a regular user, log a task with an accomplishment → row appears in dashboard with text hidden (`🕒 Pending admin approval`). Stats `accomplishmentCount` does not increment.
+8. Admin → Pending Approvals tab → row appears. Approve → user dashboard now shows the text. Reject with reason → user sees the reason.
+
+### Gotchas worth remembering
+- `accomplishment_status` default is `'approved'` so legacy rows + rows where the user didn't write an accomplishment behave normally. Don't add the `accomplishment_status: 'pending'` field to inserts unconditionally — only when the field is non-empty.
+- `displayAccomplishment(log)` is the single source of truth for "what to render"; whenever a new surface displays an accomplishment, route it through this helper so the pending/rejected behaviour stays consistent.
+- Admin edit (Records tab) bypasses the approval queue — saving the row sets `accomplishment_status='approved'` since the admin doing the edit *is* the approval. Reasonable shortcut; document it here in case the policy ever changes.
