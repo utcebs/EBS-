@@ -156,8 +156,6 @@ async function loadPerformance() {
 
   // ── Core calculations ────────────────────────────────────
   const stats    = calculateStats(logs);
-  const level    = getUserLevel(stats.totalHours);
-  const xp       = getXPProgress(stats.totalHours);
   const badges   = getEarnedBadges(stats);
   const earnedCount = badges.filter(b => b.earned).length;
   const initials = session.fullName.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0, 2);
@@ -193,18 +191,14 @@ async function loadPerformance() {
 
     <!-- ── RPG Hero card ──────────────────────────────────── -->
     <div class="perf-hero fade-in">
-      <div class="hero-avatar ${level.class}" data-user-id="${session.id}" style="border-color:${level.color};background:linear-gradient(135deg,${level.color}33,${level.color}11);overflow:hidden;">${session.avatar_url ? `<img src="${session.avatar_url}" alt="${session.fullName}" onerror="this.outerHTML='${initials}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />` : initials}</div>
+      <div class="hero-avatar" data-user-id="${session.id}" style="border-color:rgba(255,255,255,0.2);background:linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04));overflow:hidden;">${session.avatar_url ? `<img src="${session.avatar_url}" alt="${session.fullName}" onerror="this.outerHTML='${initials}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />` : initials}</div>
       <div class="hero-info">
         <div class="hero-name">${session.fullName}</div>
         <div class="hero-meta">@${session.username}</div>
         <div class="hero-badges" style="margin-top:14px;align-items:center;gap:16px;">
-          <div class="level-badge ${level.class}">${level.icon} ${level.name} · Level ${level.level}</div>
-          <div style="flex:1;max-width:200px;">
-            <div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">Progress to Lv.${Math.min(level.level+1,6)}</div>
-            <div class="progress-bar"><div class="progress-fill lvl-fill-${level.level}" style="width:${xp}%"></div></div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:3px;">${xp}% · ${stats.totalHours}h / ${LEVELS.find(l=>l.level===Math.min(level.level+1,6))?.minHours ?? '∞'}h</div>
-          </div>
-          <div style="font-size:13px;color:var(--gold);font-weight:700;">🏅 ${earnedCount}/${badges.length} badges</div>
+          <div style="font-size:13px;color:var(--text-2);font-weight:600;">${stats.totalHours}h total logged</div>
+          <div style="font-size:13px;color:var(--text-2);font-weight:600;">${stats.totalTasks} tasks</div>
+          <div style="font-size:13px;color:var(--text-2);font-weight:600;">🏅 ${earnedCount} badges earned</div>
         </div>
       </div>
     </div>
@@ -314,12 +308,6 @@ async function loadPerformance() {
         <div class="kpi-label">Tasks This Month</div>
         <div class="kpi-value">${monthLogs.length}</div>
         <div class="kpi-sub">${thisMonth}</div>
-      </div>
-      <div class="kpi-card accent-teal">
-        <span class="kpi-icon"><span class="streak-fire">🔥</span></span>
-        <div class="kpi-label">Current Streak</div>
-        <div class="kpi-value">${stats.currentStreak}<span style="font-size:16px;font-weight:500;color:var(--text-2)">d</span></div>
-        <div class="kpi-sub">Best: ${stats.maxStreak} days</div>
       </div>
       <div class="kpi-card accent-green">
         <span class="kpi-icon">📅</span>

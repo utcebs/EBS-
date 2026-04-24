@@ -1126,8 +1126,7 @@ async function viewUser(uid) {
 
   document.getElementById('userDetailKPIs').innerHTML = `
     <div class="kpi-card accent-purple"><span class="kpi-icon">⏱️</span><div class="kpi-label">Total Hours</div><div class="kpi-value">${stats.totalHours}h</div></div>
-    <div class="kpi-card accent-gold"><span class="kpi-icon">📋</span><div class="kpi-label">Total Tasks</div><div class="kpi-value">${stats.totalTasks}</div></div>
-    <div class="kpi-card accent-teal"><span class="kpi-icon">🔥</span><div class="kpi-label">Max Streak</div><div class="kpi-value">${stats.maxStreak}d</div></div>`;
+    <div class="kpi-card accent-gold"><span class="kpi-icon">📋</span><div class="kpi-label">Total Tasks</div><div class="kpi-value">${stats.totalTasks}</div></div>`;
 
   document.getElementById('userDetailTitle').textContent = `${user.full_name}'s Records`;
 
@@ -1663,8 +1662,6 @@ function renderComparison() {
       {label:'🗓️ Days Active',      get:u=>u.stats.uniqueDays,         fmt:v=>v+'d'},
       {label:'📊 Attendance Rate',  get:u=>u.attendPct,                fmt:v=>v+'%'},
       {label:'🎯 Hours Completion', get:u=>u.hoursPct,                 fmt:v=>v+'%'},
-      {label:'🔥 Current Streak',   get:u=>u.stats.currentStreak,      fmt:v=>v+'d'},
-      {label:'🏆 Best Streak',      get:u=>u.stats.maxStreak,          fmt:v=>v+'d'},
       {label:'⚡ Peak Day Hours',   get:u=>u.stats.maxDayHours,        fmt:v=>v+'h'},
       {label:'✅ Achievements',       get:u=>u.stats.accomplishmentCount, fmt:v=>v+' logs'},
       {label:'☑️ Completed Tasks',    get:u=>getCompletedCount(u.logs),   fmt:v=>v+' tasks'},
@@ -1911,7 +1908,6 @@ async function loadEmployeeAnalysis() {
     <div class="kpi-grid" style="margin-bottom:20px;">
       <div class="kpi-card accent-purple"><span class="kpi-icon">⏱️</span><div class="kpi-label">Total Hours</div><div class="kpi-value">${stats.totalHours}h</div><div class="kpi-sub">Expected: ${wt.expectedHours}h</div></div>
       <div class="kpi-card accent-gold"><span class="kpi-icon">📋</span><div class="kpi-label">Total Tasks</div><div class="kpi-value">${stats.totalTasks}</div><div class="kpi-sub">${thisMonth}: ${monthLogs.length}</div></div>
-      <div class="kpi-card accent-teal"><span class="kpi-icon">🔥</span><div class="kpi-label">Current Streak</div><div class="kpi-value">${stats.currentStreak}d</div><div class="kpi-sub">Best: ${stats.maxStreak}d</div></div>
       <div class="kpi-card accent-blue"><span class="kpi-icon">📅</span><div class="kpi-label">Days Active</div><div class="kpi-value">${stats.uniqueDays}</div><div class="kpi-sub">of ${wt.workingDays} working days</div></div>
       <div class="kpi-card accent-green"><span class="kpi-icon">🎯</span><div class="kpi-label">Hours Completion</div><div class="kpi-value">${hoursPct}%</div><div class="kpi-sub">${stats.totalHours}h / ${wt.expectedHours}h</div></div>
       <div class="kpi-card accent-red"><span class="kpi-icon">⚡</span><div class="kpi-label">Peak Day</div><div class="kpi-value">${stats.maxDayHours}h</div><div class="kpi-sub">${daysEq}d equivalent</div></div>

@@ -353,11 +353,7 @@ function renderSidebar(activePage) {
     <div class="sidebar-header"><div class="app-logo"><img src="logo.png" alt="EBS" class="logo-dark" style="height:28px;mix-blend-mode:screen;flex-shrink:0;" /><img src="logo-light.png" alt="EBS" class="logo-light" style="height:28px;flex-shrink:0;" /><span class="logo-text">EBS Tracker</span></div></div>
     <div class="sidebar-user">
       <div class="user-avatar lvl-1" id="sb-avatar" style="overflow:hidden;">${avatarInnerHTML(session)}</div>
-      <div class="user-info"><div class="user-name">${session.fullName}</div><div class="user-level-tag" id="sb-level">Loading...</div></div>
-    </div>
-    <div class="sidebar-xp">
-      <div class="xp-row"><span>XP</span><span id="sb-xp-label">0%</span></div>
-      <div class="xp-track"><div class="xp-fill lvl-fill-1" id="sb-xp-fill" style="width:0%"></div></div>
+      <div class="user-info"><div class="user-name">${session.fullName}</div><div class="user-level-tag" id="sb-level" style="font-size:11px;color:var(--text-3);">Loading...</div></div>
     </div>
     <nav class="sidebar-nav">
       <a href="dashboard.html" class="nav-link ${activePage === 'dashboard' ? 'active' : ''}"><span class="nav-icon">📊</span><span>Dashboard</span></a>
@@ -382,15 +378,9 @@ async function loadSidebarStats(userId) {
     ]);
 
     const total = (hoursRes.data || []).reduce((s, l) => s + parseFloat(l.hours_spent || 0), 0);
-    const lvl = getUserLevel(total), xp = getXPProgress(total);
-    const avEl = document.getElementById('sb-avatar');
+    const taskCount = (hoursRes.data || []).length;
     const lvEl = document.getElementById('sb-level');
-    const fpEl = document.getElementById('sb-xp-fill');
-    const lpEl = document.getElementById('sb-xp-label');
-    if (avEl) avEl.className = `user-avatar ${lvl.class}`;
-    if (lvEl) { lvEl.textContent = `${lvl.icon} ${lvl.name} · Lv.${lvl.level}`; lvEl.style.color = lvl.color; }
-    if (fpEl) { fpEl.style.width = `${xp}%`; fpEl.className = `xp-fill lvl-fill-${lvl.level}`; }
-    if (lpEl) lpEl.textContent = `${xp}%`;
+    if (lvEl) lvEl.textContent = `${total.toFixed(1)}h · ${taskCount} tasks`;
 
     // Keep avatar in sync — refresh localStorage session and all avatar/hero-avatar DOM nodes
     if (profRes.data) {
