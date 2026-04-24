@@ -405,6 +405,7 @@ async function submitLog() {
 
   const linkedProjectId = document.getElementById('linkedProject').value || null;
 
+  const accomp = document.getElementById('accomplishment').value.trim();
   const payload = {
     user_id:           session.id,
     team_member:       document.getElementById('teamMember').value.trim(),
@@ -416,10 +417,14 @@ async function submitLog() {
     category:          document.getElementById('selectedCategory').value,
     sub_category:      document.getElementById('selectedSubCategory').value,
     hours_spent:       parseFloat(document.getElementById('hoursSpent').value),
-    accomplishment:    document.getElementById('accomplishment').value.trim(),
+    accomplishment:    accomp,
     comments_notes:    document.getElementById('commentsNotes').value.trim(),
     is_completed:      document.getElementById('isCompleted').checked,
     linked_project_id: linkedProjectId,
+    // Non-empty accomplishment requires admin approval before it counts
+    // toward stats or is publicly visible. Empty stays at column default
+    // ('approved') so the row contributes hours/categories normally.
+    ...(accomp ? { accomplishment_status: 'pending' } : {}),
   };
 
   // Validate

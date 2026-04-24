@@ -1059,6 +1059,7 @@ async function submitTaskLog() {
   const weekVal = parseInt(document.getElementById('logTaskWeek').value) || getWeekNumber(dateVal);
 
   // Insert task log
+  const accomp = document.getElementById('logTaskAccomp').value.trim();
   const { error: logErr } = await db.from('task_logs').insert({
     user_id:          session.id,
     team_member:      session.fullName,
@@ -1070,10 +1071,12 @@ async function submitTaskLog() {
     category,
     sub_category:     document.getElementById('logTaskSubCategory').value,
     hours_spent:      hours,
-    accomplishment:   document.getElementById('logTaskAccomp').value.trim(),
+    accomplishment:   accomp,
     comments_notes:   '',
     is_completed:     document.getElementById('logTaskCompleted').checked,
     linked_project_id: linkedProjectId,
+    // Non-empty accomplishment requires admin approval before counting.
+    ...(accomp ? { accomplishment_status: 'pending' } : {}),
   });
 
   if (logErr) { err.textContent = logErr.message; err.classList.add('show'); btn.disabled=false; btn.innerHTML='💾 Save to Work Log'; return; }

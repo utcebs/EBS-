@@ -263,8 +263,13 @@ function calculateStats(logs) {
   });
   const hasAllRounder = Object.values(byWeek).some(s => s.size === 3);
 
-  // Count of entries where accomplishment was filled (not a rate — one task may be logged multiple times/day)
-  const accomplishmentCount = logs.filter(l => l.accomplishment && l.accomplishment.trim()).length;
+  // Count of entries where accomplishment was filled AND admin-approved.
+  // Pending/rejected accomplishments don't count. Legacy rows without the
+  // accomplishment_status column are treated as approved.
+  const accomplishmentCount = logs.filter(l =>
+    l.accomplishment && l.accomplishment.trim() &&
+    (!l.accomplishment_status || l.accomplishment_status === 'approved')
+  ).length;
   const accomplishmentRate = totalTasks > 0 ? Math.round((accomplishmentCount / totalTasks) * 100) : 0;
 
   // Generic per-category breakdown so admin-added categories beyond the
@@ -592,6 +597,21 @@ async function loadSidebarStats(userId) {
 }
 
 /* ── Misc ─────────────────────────────────────────────────── */
+/* ── Accomplishment display ─────────────────────────────────
+ * Returns the text that should be shown for an accomplishment based on
+ * its approval status. Pending → placeholder until admin approves.
+ * Rejected → reason if provided. Approved (or legacy null) → text as-is.
+ */
+function displayAccomplishment(log) {
+  if (!log) return '';
+  const text = (log.accomplishment || '').trim();
+  if (!text) return '';
+  const status = log.accomplishment_status;
+  if (status === 'pending')  return '🕒 Pending admin approval';
+  if (status === 'rejected') return '⛔ Rejected' + (log.rejection_reason ? ` — ${log.rejection_reason}` : '');
+  return text;
+}
+
 function categoryBadge(cat) {
   const c = CAT_COLORS[cat] || { border: '#64748b', text: '#94a3b8', bg: '#1e293b' };
   return `<span class="cat-badge" style="border-color:${c.border};color:${c.text};background:${c.bg}">${cat}</span>`;

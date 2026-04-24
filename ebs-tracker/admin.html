@@ -60,6 +60,7 @@
     <div class="admin-tabs">
       <button class="admin-tab active" onclick="switchTab('users')">👥 Users</button>
       <button class="admin-tab" onclick="switchTab('records')">📋 Records</button>
+      <button class="admin-tab" onclick="switchTab('approvals')">🕒 Pending Approvals <span id="approvalsCountBadge" style="display:none;background:var(--warning);color:#080600;font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;margin-left:4px;"></span></button>
       <button class="admin-tab" onclick="switchTab('comparison')">⚖️ Comparison</button>
       <button class="admin-tab" onclick="switchTab('analysis')">🔬 Employee Analysis</button>
       <button class="admin-tab" onclick="switchTab('export')">📤 Export</button>
@@ -161,6 +162,33 @@
               <tr><td colspan="8"><div class="loading"><div class="spinner"></div> Loading…</div></td></tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: PENDING APPROVALS -->
+    <div id="tab-approvals" class="tab-content" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h2 class="page-title" style="font-size:18px;margin:0;">🕒 Pending Accomplishment Approvals</h2>
+          <p class="page-subtitle" style="margin:4px 0 0;">Approve or reject Key Accomplishments before they're counted in stats and publicly visible.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="loadApprovalsTab()">🔄 Refresh</button>
+      </div>
+      <div id="approvalsList" style="display:flex;flex-direction:column;gap:12px;">
+        <div class="loading"><div class="spinner"></div> Loading…</div>
+      </div>
+    </div>
+
+    <!-- Reject reason modal -->
+    <div id="rejectReasonModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+      <div class="card" style="max-width:420px;width:100%;">
+        <div class="card-title-lg" style="margin-bottom:14px;">⛔ Reject Accomplishment</div>
+        <div style="font-size:13px;color:var(--text-2);margin-bottom:12px;" id="rejectReasonContext"></div>
+        <textarea id="rejectReasonText" class="form-control" rows="3" placeholder="Reason (visible to the user)…"></textarea>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+          <button class="btn btn-secondary btn-sm" onclick="closeRejectModal()">Cancel</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmRejectApproval()">⛔ Reject</button>
         </div>
       </div>
     </div>
@@ -741,6 +769,7 @@ async function init() {
   renderRecordsTable();
   renderComparison();
   setupExportSelects();
+  refreshApprovalsCountBadge();
 }
 
 async function loadUsers() {
@@ -754,7 +783,7 @@ async function loadAllLogs() {
 }
 
 // ── Tab switching ──────────────────────────────────────────
-const TAB_ORDER = ['users','records','comparison','analysis','export','settings','badges','project-analytics'];
+const TAB_ORDER = ['users','records','approvals','comparison','analysis','export','settings','badges','project-analytics'];
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
@@ -770,6 +799,7 @@ function switchTab(name) {
   if (name === 'analysis')   initAnalysisTab();
   if (name === 'export')     initExportTab();
   if (name === 'badges')     loadBadgesTab();
+  if (name === 'approvals')  loadApprovalsTab();
 }
 
 // ── Settings Tab ───────────────────────────────────────────
@@ -1270,7 +1300,7 @@ async function viewUser(uid) {
         <td>${truncate(l.task_project,40)}</td>
         <td>${categoryBadge(l.category)}<span style='font-size:11px;color:var(--text-3);display:block;margin-top:2px;'>${l.sub_category||''}</span></td>
         <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
-        <td class="td-sm">${truncate(l.accomplishment,40)}</td>
+        <td class="td-sm">${l.accomplishment_status === 'pending' ? '<span style="color:var(--warning);font-weight:700;">🕒 Pending</span> ' : ''}${truncate(l.accomplishment,40)}</td>
         <td class="td-muted td-sm">${truncate(l.comments_notes,35)}</td>
         <td><button class="btn btn-secondary btn-sm btn-icon" onclick="openAdminEdit('${l.id}')">✏️</button></td>
       </tr>`).join('')}
@@ -1498,16 +1528,129 @@ function renderRecordsTable() {
     tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">No records found</div></div></td></tr>`;
     return;
   }
-  tbody.innerHTML = logs.map(l => `<tr>
+  tbody.innerHTML = logs.map(l => {
+    const pendingBadge = l.accomplishment_status === 'pending'
+      ? '<span style="display:inline-block;padding:1px 6px;border-radius:4px;background:rgba(245,158,11,0.18);color:var(--warning);font-size:9px;font-weight:800;letter-spacing:.04em;margin-right:4px;">🕒 PENDING</span>'
+      : l.accomplishment_status === 'rejected'
+      ? '<span style="display:inline-block;padding:1px 6px;border-radius:4px;background:rgba(239,68,68,0.18);color:var(--p-urgent);font-size:9px;font-weight:800;letter-spacing:.04em;margin-right:4px;">⛔ REJECTED</span>'
+      : '';
+    return `<tr>
     <td class="td-sm">${formatDate(l.log_date)}</td>
     <td><strong>${l.team_member || l.profiles?.full_name || '—'}</strong></td>
     <td>${truncate(l.task_project, 35)}</td>
     <td>${categoryBadge(l.category)}<span style='font-size:11px;color:var(--text-3);display:block;margin-top:2px;'>${l.sub_category||''}</span></td>
     <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
-    <td class="td-sm">${truncate(l.accomplishment, 35)}</td>
+    <td class="td-sm">${pendingBadge}${truncate(l.accomplishment, 35)}</td>
     <td class="td-muted td-sm">${truncate(l.comments_notes, 30)}</td>
     <td><button class="btn btn-secondary btn-sm btn-icon" onclick="openAdminEdit('${l.id}')">✏️</button></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
+}
+
+// ── Pending Approvals Tab ──────────────────────────────────
+// Lists every task_log with accomplishment_status='pending'. Approve →
+// status='approved' + approved_by/at stamps. Reject → modal collects
+// reason, then status='rejected' + rejection_reason. Refresh count
+// badge after every action.
+let _rejectingApprovalId = null;
+
+async function refreshApprovalsCountBadge() {
+  try {
+    const { count } = await db.from('task_logs').select('id', { count: 'exact', head: true }).eq('accomplishment_status', 'pending');
+    const badge = document.getElementById('approvalsCountBadge');
+    if (!badge) return;
+    if (count && count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+  } catch (e) { /* migration not applied — silently skip */ }
+}
+
+async function loadApprovalsTab() {
+  const list = document.getElementById('approvalsList');
+  if (!list) return;
+  list.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+
+  let pending = [];
+  try {
+    const { data, error } = await db.from('task_logs')
+      .select('id, log_date, task_project, accomplishment, hours_spent, user_id, profiles(full_name)')
+      .eq('accomplishment_status', 'pending')
+      .order('log_date', { ascending: false });
+    if (error) throw error;
+    pending = data || [];
+  } catch (e) {
+    list.innerHTML = '<div style="padding:14px;background:var(--bg-surface);border:1px dashed var(--border);border-radius:var(--radius-lg);font-size:12px;color:var(--text-3);">📦 Run the <code>2026-04-25_assigned-links-and-accomplishment-approval.sql</code> migration in Supabase to enable accomplishment approvals.</div>';
+    return;
+  }
+
+  refreshApprovalsCountBadge();
+
+  if (!pending.length) {
+    list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-3);font-size:13px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);">🎉 No pending accomplishments. All caught up.</div>';
+    return;
+  }
+
+  list.innerHTML = pending.map(l => {
+    const name = l.profiles?.full_name || '—';
+    return `
+      <div class="card" style="padding:14px 18px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:240px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
+            <span style="font-weight:800;font-size:14px;">👤 ${name}</span>
+            <span style="font-size:11px;color:var(--text-3);">📅 ${formatDate(l.log_date)}</span>
+            <span style="font-size:11px;color:var(--text-3);">⏱️ ${parseFloat(l.hours_spent).toFixed(1)}h</span>
+            <span style="font-size:11px;color:var(--text-3);">📋 ${truncate(l.task_project, 50)}</span>
+          </div>
+          <div style="font-size:14px;line-height:1.4;color:var(--text-1);background:var(--bg-surface);padding:10px 12px;border-radius:var(--radius);border-left:3px solid var(--warning);">
+            "${l.accomplishment || ''}"
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn btn-success btn-sm" onclick="approveApproval('${l.id}')">✓ Approve</button>
+          <button class="btn btn-danger btn-sm" onclick="openRejectModal('${l.id}','${name.replace(/'/g,"\\'")}')">⛔ Reject</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function approveApproval(id) {
+  const { error } = await db.from('task_logs').update({
+    accomplishment_status: 'approved',
+    approved_by: session.id,
+    approved_at: new Date().toISOString(),
+    rejection_reason: null,
+  }).eq('id', id);
+  if (error) showToast('Failed: ' + error.message, 'error');
+  else { showToast('Approved ✓', 'success'); loadApprovalsTab(); }
+}
+
+function openRejectModal(id, name) {
+  _rejectingApprovalId = id;
+  document.getElementById('rejectReasonContext').textContent = `Reject ${name}'s accomplishment? They'll see your reason.`;
+  document.getElementById('rejectReasonText').value = '';
+  document.getElementById('rejectReasonModal').style.display = 'flex';
+}
+
+function closeRejectModal() {
+  document.getElementById('rejectReasonModal').style.display = 'none';
+  _rejectingApprovalId = null;
+}
+
+async function confirmRejectApproval() {
+  const reason = document.getElementById('rejectReasonText').value.trim();
+  if (!reason) { showToast('Please enter a reason', 'warning'); return; }
+  if (!_rejectingApprovalId) return;
+  const { error } = await db.from('task_logs').update({
+    accomplishment_status: 'rejected',
+    approved_by: session.id,
+    approved_at: new Date().toISOString(),
+    rejection_reason: reason,
+  }).eq('id', _rejectingApprovalId);
+  if (error) showToast('Failed: ' + error.message, 'error');
+  else {
+    showToast('Rejected', 'success');
+    closeRejectModal();
+    loadApprovalsTab();
+  }
 }
 
 // ── Badges Tab (admin-defined, auto-assigned) ───────────────
@@ -2023,7 +2166,7 @@ function showDrillDown(userStat, category, filtered, periodLabel) {
           <td>${truncate(l.task_project,40)}</td>
           <td><span style="font-size:12px;color:var(--text-2);">${l.sub_category||'—'}</span></td>
           <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
-          <td class="td-sm td-muted">${truncate(l.accomplishment,45)}</td>
+          <td class="td-sm td-muted">${l.accomplishment_status === 'pending' ? '<span style="color:var(--warning);font-weight:700;">🕒 Pending</span> ' : ''}${truncate(l.accomplishment,45)}</td>
         </tr>`).join('')}`;
   }
 
@@ -2112,6 +2255,11 @@ async function saveAdminEdit() {
     hours_spent:      parseFloat(document.getElementById('aeHours').value),
     accomplishment:   document.getElementById('aeAccomp').value.trim(),
     comments_notes:   document.getElementById('aeNotes').value.trim(),
+    // Admin edit implies admin approval — auto-mark approved.
+    accomplishment_status: 'approved',
+    approved_by: session.id,
+    approved_at: new Date().toISOString(),
+    rejection_reason: null,
   };
   const { error } = await db.from('task_logs').update(updates).eq('id', adminEditId);
   if (error) { showToast('Failed to save: ' + error.message, 'error'); }

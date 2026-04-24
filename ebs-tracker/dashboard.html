@@ -349,7 +349,7 @@
             ? `<input type="checkbox" ${l.is_completed?'checked':''} onchange="toggleCompleted('${l.id}',this.checked)" style="width:16px;height:16px;accent-color:var(--success);cursor:pointer;" title="Mark as completed">`
             : (l.is_completed ? '<span class="completed-badge">✅ Done</span>' : '—')}
         </td>
-        <td class="td-sm">${truncate(l.accomplishment, 45)}</td>
+        <td class="td-sm">${truncate(displayAccomplishment(l), 45)}</td>
         <td>${actionBtns}</td>
       </tr>`;
     }).join('');
