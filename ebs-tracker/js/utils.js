@@ -330,7 +330,103 @@ async function loadCategories() {
 }
 
 function getEarnedBadges(stats) {
+  // Legacy shim — only used by code that hasn't migrated to fetchUserBadges yet.
+  // Returns the static BADGES array (config.js) with `.earned` set. Will be
+  // dropped once admin.html / performance.html no longer call it.
+  if (typeof BADGES === 'undefined') return [];
   return BADGES.map(b => ({ ...b, earned: b.check(stats) }));
+}
+
+/* ── Admin-defined badges (Phase 6) ──────────────────────────
+ * evaluateBadge: pure check, returns true/false for a single badge given a
+ * user's stats and an optional context (assigned-task list for on_time_rate).
+ * Unknown condition types return false — they're a future-proof slot.
+ */
+function evaluateBadge(badge, stats, ctx) {
+  if (!badge || !badge.condition_type) return false;
+  const cfg = badge.condition_config || {};
+  switch (badge.condition_type) {
+    case 'total_hours':
+      return (stats?.totalHours || 0) >= (cfg.threshold || Infinity);
+    case 'consecutive_days':
+      return (stats?.maxStreak || 0) >= (cfg.threshold || Infinity);
+    case 'category_count': {
+      // category_id refers to categories.id but task_logs stores the *name*.
+      // Resolve the name from the cached category list set by syncUserBadges.
+      const name = (ctx?.categoryNameById && ctx.categoryNameById[cfg.category_id]) || null;
+      if (!name) return false;
+      const count = (ctx?.logs || []).filter(l => l.category === name).length;
+      return count >= (cfg.threshold || Infinity);
+    }
+    case 'on_time_rate': {
+      const closed = (ctx?.tasks || []).filter(t => (t.status === 'done' || t.status === 'logged') && t.due_date && t.done_at);
+      if (closed.length < (cfg.min_tasks || 0)) return false;
+      const onTime = closed.filter(t => new Date(t.done_at) <= new Date(t.due_date)).length;
+      return Math.round((onTime / closed.length) * 100) >= (cfg.threshold_pct || 100);
+    }
+    case 'custom':
+    default:
+      return false;
+  }
+}
+
+/* fetchUserBadges: returns { badges: [], earned: Set<badge_id> } for one user.
+ * Used by performance.html to render the badge wall. */
+async function fetchUserBadges(userId) {
+  try {
+    const [bRes, ubRes] = await Promise.all([
+      db.from('badges').select('*').eq('is_active', true).order('created_at'),
+      db.from('user_badges').select('badge_id, earned_at').eq('user_id', userId),
+    ]);
+    if (bRes.error) throw bRes.error;
+    const earned = new Set((ubRes.data || []).map(r => r.badge_id));
+    return { badges: bRes.data || [], earned };
+  } catch (e) {
+    return { badges: [], earned: new Set(), error: e };
+  }
+}
+
+/* syncUserBadges: evaluate every active badge against this user, INSERT any
+ * newly-earned rows. Returns the up-to-date earned Set. */
+async function syncUserBadges(userId, stats, ctxOverrides) {
+  try {
+    const [bRes, ubRes, catRes] = await Promise.all([
+      db.from('badges').select('*').eq('is_active', true),
+      db.from('user_badges').select('badge_id').eq('user_id', userId),
+      db.from('categories').select('id, name'),
+    ]);
+    if (bRes.error) throw bRes.error;
+    const badges = bRes.data || [];
+    const earned = new Set((ubRes.data || []).map(r => r.badge_id));
+    const categoryNameById = {};
+    (catRes.data || []).forEach(c => { categoryNameById[c.id] = c.name; });
+
+    let assignedTasks = ctxOverrides?.tasks;
+    let userLogs      = ctxOverrides?.logs;
+    if (badges.some(b => b.condition_type === 'on_time_rate') && !assignedTasks) {
+      const { data } = await db.from('priority_tasks').select('status, due_date, done_at').eq('user_id', userId).not('assigned_by', 'is', null);
+      assignedTasks = data || [];
+    }
+    if (badges.some(b => b.condition_type === 'category_count') && !userLogs) {
+      const { data } = await db.from('task_logs').select('category').eq('user_id', userId);
+      userLogs = data || [];
+    }
+
+    const ctx = { tasks: assignedTasks || [], logs: userLogs || [], categoryNameById };
+    const newRows = [];
+    badges.forEach(b => {
+      if (!earned.has(b.id) && evaluateBadge(b, stats, ctx)) {
+        newRows.push({ user_id: userId, badge_id: b.id });
+        earned.add(b.id);
+      }
+    });
+    if (newRows.length) {
+      await db.from('user_badges').upsert(newRows, { onConflict: 'user_id,badge_id', ignoreDuplicates: true });
+    }
+    return earned;
+  } catch (e) {
+    return new Set();
+  }
 }
 
 /* ── Weekly aggregation ───────────────────────────────────── */

@@ -64,6 +64,7 @@
       <button class="admin-tab" onclick="switchTab('analysis')">🔬 Employee Analysis</button>
       <button class="admin-tab" onclick="switchTab('export')">📤 Export</button>
       <button class="admin-tab" onclick="switchTab('settings')">⚙️ Settings</button>
+      <button class="admin-tab" onclick="switchTab('badges')">🏅 Badges</button>
       <button class="admin-tab" onclick="switchTab('project-analytics')">📊 Project Analytics</button>
     </div>
 
@@ -439,6 +440,64 @@
     </div>
 
 
+    <!-- TAB: BADGES -->
+    <div id="tab-badges" class="tab-content" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <h2 class="page-title" style="font-size:18px;margin:0;">🏅 Badges</h2>
+          <p class="page-subtitle" style="margin:4px 0 0;">Define earnable badges. Conditions are evaluated client-side on every page load that displays badges.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openNewBadgeModal()">➕ New Badge</button>
+      </div>
+
+      <div id="badgesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;">
+        <div class="loading"><div class="spinner"></div> Loading badges…</div>
+      </div>
+    </div>
+
+    <!-- New / Edit badge modal -->
+    <div id="badgeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+      <div class="card" style="max-width:520px;width:100%;max-height:90vh;overflow-y:auto;">
+        <div class="card-title-lg" id="badgeModalTitle" style="margin-bottom:14px;">New Badge</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="display:grid;grid-template-columns:80px 1fr;gap:12px;">
+            <div>
+              <label class="form-label">Icon</label>
+              <input type="text" id="badgeModalIcon" class="form-control" placeholder="🏅" maxlength="4" />
+            </div>
+            <div>
+              <label class="form-label">Name *</label>
+              <input type="text" id="badgeModalName" class="form-control" placeholder="e.g. Century Club" />
+            </div>
+          </div>
+          <div>
+            <label class="form-label">Description</label>
+            <input type="text" id="badgeModalDesc" class="form-control" placeholder="What earns this badge?" />
+          </div>
+          <div>
+            <label class="form-label">Condition Type *</label>
+            <select id="badgeModalConditionType" class="form-control" onchange="renderBadgeConditionInputs()">
+              <option value="total_hours">Total hours logged ≥ N</option>
+              <option value="consecutive_days">Consecutive working days logged ≥ N</option>
+              <option value="category_count">Tasks completed in a specific category ≥ N</option>
+              <option value="on_time_rate">On-time completion rate ≥ X% (min N closed tasks)</option>
+              <option value="custom">Custom (raw JSON — admin handles evaluator)</option>
+            </select>
+          </div>
+          <div id="badgeConditionInputs"></div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="badgeModalActive" checked style="width:16px;height:16px;cursor:pointer;" />
+            <label for="badgeModalActive" style="font-size:12px;color:var(--text-2);cursor:pointer;">Active (visible to users + auto-assigned)</label>
+          </div>
+          <div id="badgePreview" style="font-size:12px;color:var(--text-3);padding:10px;background:var(--bg-surface);border:1px dashed var(--border);border-radius:var(--radius);">Preview: how many users currently match this condition will appear here after Save.</div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+          <button class="btn btn-secondary btn-sm" onclick="closeBadgeModal()">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="badgeModalSaveBtn" onclick="saveBadgeModal()">💾 Save</button>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB: PROJECT ANALYTICS -->
     <div id="tab-project-analytics" class="tab-content" style="display:none;">
       <div class="page-header" style="margin-bottom:20px;">
@@ -694,7 +753,7 @@ async function loadAllLogs() {
 }
 
 // ── Tab switching ──────────────────────────────────────────
-const TAB_ORDER = ['users','records','comparison','analysis','export','settings','project-analytics'];
+const TAB_ORDER = ['users','records','comparison','analysis','export','settings','badges','project-analytics'];
 function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
   document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
@@ -709,6 +768,7 @@ function switchTab(name) {
   }
   if (name === 'analysis')   initAnalysisTab();
   if (name === 'export')     initExportTab();
+  if (name === 'badges')     loadBadgesTab();
 }
 
 // ── Settings Tab ───────────────────────────────────────────
@@ -1443,6 +1503,235 @@ function renderRecordsTable() {
   </tr>`).join('');
 }
 
+// ── Badges Tab (admin-defined, auto-assigned) ───────────────
+// Reads from `badges` and `user_badges`. Conditions are evaluated by
+// utils.js::evaluateBadge against per-user calculateStats output.
+let badgeEditId = null;
+let _badgeAdminCategoriesCache = null;
+
+async function loadBadgesTab() {
+  const grid = document.getElementById('badgesGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div> Loading badges…</div>';
+
+  let badges = [];
+  let migrated = true;
+  try {
+    const { data, error } = await db.from('badges').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    badges = data || [];
+  } catch (e) {
+    migrated = false;
+  }
+
+  if (!migrated) {
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:14px;background:var(--bg-surface);border:1px dashed var(--border);border-radius:var(--radius-lg);font-size:12px;color:var(--text-3);">📦 Run the <code>2026-04-24_categories-badges-doneat.sql</code> migration in Supabase to enable the badges system.</div>';
+    return;
+  }
+
+  // Eligibility counts: how many existing users would currently match each badge.
+  const counts = await computeBadgeEligibility(badges);
+
+  if (!badges.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:14px;font-size:12px;color:var(--text-3);">No badges yet. Click "+ New Badge" to create one.</div>';
+    return;
+  }
+
+  grid.innerHTML = badges.map(b => `
+    <div class="card" style="${!b.is_active ? 'opacity:.55;' : ''}">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <div style="font-size:32px;line-height:1;">${b.icon || '🏅'}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:15px;">${b.name}${!b.is_active ? ' <span style="font-size:10px;color:var(--warning);font-weight:600;">INACTIVE</span>' : ''}</div>
+          <div style="font-size:11px;color:var(--text-3);">${badgeConditionLabel(b)}</div>
+        </div>
+      </div>
+      ${b.description ? `<div style="font-size:12px;color:var(--text-2);margin-bottom:10px;">${b.description}</div>` : ''}
+      <div style="font-size:11px;color:var(--text-3);padding:6px 10px;background:var(--bg-surface);border-radius:var(--radius-sm);margin-bottom:10px;">
+        👥 <strong style="color:var(--text-1)">${counts[b.id] || 0}</strong> user${(counts[b.id] || 0) === 1 ? '' : 's'} currently match
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-secondary btn-sm" onclick="openEditBadgeModal('${b.id}')">✏️ Edit</button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleBadgeActive('${b.id}', ${b.is_active})">${b.is_active ? '👁️‍🗨️ Hide' : '👁️ Show'}</button>
+        <button class="btn btn-success btn-sm" onclick="syncAllUserBadges()" title="Run evaluator across all users">🔄 Sync</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteBadge('${b.id}', '${b.name.replace(/'/g,"\\'")}')">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+
+function badgeConditionLabel(b) {
+  const c = b.condition_config || {};
+  switch (b.condition_type) {
+    case 'total_hours':      return `⏱️ Total hours ≥ ${c.threshold ?? '?'}`;
+    case 'consecutive_days': return `🔥 ${c.threshold ?? '?'} days in a row`;
+    case 'category_count':   return `📋 ≥ ${c.threshold ?? '?'} tasks in a category`;
+    case 'on_time_rate':     return `✅ ≥ ${c.threshold_pct ?? '?'}% on time (min ${c.min_tasks ?? '?'})`;
+    case 'custom':           return '⚙️ Custom rule';
+    default:                 return b.condition_type;
+  }
+}
+
+async function computeBadgeEligibility(badges) {
+  const counts = {};
+  if (!badges.length || !allUsers.length) return counts;
+  // We already have allLogs in scope (loaded by loadAllLogs at admin init)
+  // and priority_tasks may need a separate fetch for on_time_rate.
+  let assignedTasks = [];
+  if (badges.some(b => b.condition_type === 'on_time_rate')) {
+    const { data } = await db.from('priority_tasks').select('user_id, status, due_date, done_at').not('assigned_by', 'is', null);
+    assignedTasks = data || [];
+  }
+  allUsers.forEach(u => {
+    const userLogs = allLogs.filter(l => l.user_id === u.id);
+    const stats = calculateStats(userLogs);
+    const ctx = { tasks: assignedTasks.filter(t => t.user_id === u.id), logs: userLogs };
+    badges.forEach(b => {
+      if (evaluateBadge(b, stats, ctx)) counts[b.id] = (counts[b.id] || 0) + 1;
+    });
+  });
+  return counts;
+}
+
+async function syncAllUserBadges() {
+  const { data: badges } = await db.from('badges').select('*').eq('is_active', true);
+  if (!badges) return;
+  const { data: assignedTasks } = await db.from('priority_tasks').select('user_id, status, due_date, done_at').not('assigned_by', 'is', null);
+  const inserts = [];
+  allUsers.forEach(u => {
+    const userLogs = allLogs.filter(l => l.user_id === u.id);
+    const stats = calculateStats(userLogs);
+    const ctx = { tasks: (assignedTasks || []).filter(t => t.user_id === u.id), logs: userLogs };
+    badges.forEach(b => {
+      if (evaluateBadge(b, stats, ctx)) inserts.push({ user_id: u.id, badge_id: b.id });
+    });
+  });
+  if (!inserts.length) { showToast('No new badges to award', 'info'); return; }
+  const { error } = await db.from('user_badges').upsert(inserts, { onConflict: 'user_id,badge_id', ignoreDuplicates: true });
+  if (error) showToast('Sync failed: ' + error.message, 'error');
+  else { showToast(`Awarded ${inserts.length} badge instance${inserts.length === 1 ? '' : 's'}`, 'success'); loadBadgesTab(); }
+}
+
+function openNewBadgeModal() {
+  badgeEditId = null;
+  document.getElementById('badgeModalTitle').textContent = 'New Badge';
+  document.getElementById('badgeModalIcon').value = '🏅';
+  document.getElementById('badgeModalName').value = '';
+  document.getElementById('badgeModalDesc').value = '';
+  document.getElementById('badgeModalConditionType').value = 'total_hours';
+  document.getElementById('badgeModalActive').checked = true;
+  renderBadgeConditionInputs();
+  document.getElementById('badgeModal').style.display = 'flex';
+}
+
+async function openEditBadgeModal(id) {
+  const { data } = await db.from('badges').select('*').eq('id', id).single();
+  if (!data) { showToast('Badge not found', 'error'); return; }
+  badgeEditId = id;
+  document.getElementById('badgeModalTitle').textContent = 'Edit Badge';
+  document.getElementById('badgeModalIcon').value = data.icon || '🏅';
+  document.getElementById('badgeModalName').value = data.name || '';
+  document.getElementById('badgeModalDesc').value = data.description || '';
+  document.getElementById('badgeModalConditionType').value = data.condition_type;
+  document.getElementById('badgeModalActive').checked = !!data.is_active;
+  await renderBadgeConditionInputs(data.condition_config || {});
+  document.getElementById('badgeModal').style.display = 'flex';
+}
+
+function closeBadgeModal() {
+  document.getElementById('badgeModal').style.display = 'none';
+  badgeEditId = null;
+}
+
+async function renderBadgeConditionInputs(prefill) {
+  const type = document.getElementById('badgeModalConditionType').value;
+  const host = document.getElementById('badgeConditionInputs');
+  const cfg = prefill || {};
+  let html = '';
+  if (type === 'total_hours' || type === 'consecutive_days') {
+    html = `<div><label class="form-label">Threshold (${type === 'total_hours' ? 'hours' : 'days'})</label>
+      <input type="number" id="bc_threshold" class="form-control" value="${cfg.threshold ?? ''}" min="1" /></div>`;
+  } else if (type === 'category_count') {
+    if (!_badgeAdminCategoriesCache) _badgeAdminCategoriesCache = await loadCategories();
+    html = `<div><label class="form-label">Category</label>
+        <select id="bc_category" class="form-control">
+          ${_badgeAdminCategoriesCache.map(c => `<option value="${c.id}" ${cfg.category_id === c.id ? 'selected' : ''}>${c.icon || '📁'} ${c.name}</option>`).join('')}
+        </select>
+      </div>
+      <div style="margin-top:10px;"><label class="form-label">Threshold (task count)</label>
+        <input type="number" id="bc_threshold" class="form-control" value="${cfg.threshold ?? ''}" min="1" />
+      </div>`;
+  } else if (type === 'on_time_rate') {
+    html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label class="form-label">Threshold % on time</label>
+        <input type="number" id="bc_pct" class="form-control" value="${cfg.threshold_pct ?? 90}" min="1" max="100" /></div>
+      <div><label class="form-label">Min closed tasks</label>
+        <input type="number" id="bc_minTasks" class="form-control" value="${cfg.min_tasks ?? 5}" min="1" /></div>
+    </div>`;
+  } else if (type === 'custom') {
+    html = `<div><label class="form-label">Condition JSON (your evaluator handles this)</label>
+      <textarea id="bc_json" class="form-control" rows="4" placeholder='{"key": "value"}'>${cfg ? JSON.stringify(cfg, null, 2) : ''}</textarea>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px;">Evaluator returns false for unknown custom rules — extend evaluateBadge() in utils.js to add support.</div></div>`;
+  }
+  host.innerHTML = html;
+}
+
+async function saveBadgeModal() {
+  const name = document.getElementById('badgeModalName').value.trim();
+  const desc = document.getElementById('badgeModalDesc').value.trim();
+  const icon = document.getElementById('badgeModalIcon').value.trim();
+  const type = document.getElementById('badgeModalConditionType').value;
+  const isActive = document.getElementById('badgeModalActive').checked;
+  if (!name) { showToast('Name is required', 'warning'); return; }
+
+  // Build condition_config based on type
+  let cfg = {};
+  if (type === 'total_hours' || type === 'consecutive_days') {
+    const v = parseInt(document.getElementById('bc_threshold').value);
+    if (!v || v < 1) { showToast('Threshold must be a positive number', 'warning'); return; }
+    cfg = { threshold: v };
+  } else if (type === 'category_count') {
+    const cid = document.getElementById('bc_category')?.value;
+    const v = parseInt(document.getElementById('bc_threshold').value);
+    if (!cid || !v) { showToast('Category and threshold are required', 'warning'); return; }
+    cfg = { category_id: cid, threshold: v };
+  } else if (type === 'on_time_rate') {
+    const pct = parseInt(document.getElementById('bc_pct').value);
+    const mt  = parseInt(document.getElementById('bc_minTasks').value);
+    if (!pct || !mt) { showToast('Percentage and min tasks are required', 'warning'); return; }
+    cfg = { threshold_pct: pct, min_tasks: mt };
+  } else if (type === 'custom') {
+    try { cfg = JSON.parse(document.getElementById('bc_json').value || '{}'); }
+    catch (e) { showToast('JSON parse error: ' + e.message, 'error'); return; }
+  }
+
+  const payload = {
+    name, description: desc || null, icon: icon || null,
+    condition_type: type, condition_config: cfg, is_active: isActive,
+    created_by: session.id,
+  };
+  let res;
+  if (badgeEditId) res = await db.from('badges').update(payload).eq('id', badgeEditId);
+  else res = await db.from('badges').insert(payload);
+  if (res.error) { showToast('Failed: ' + res.error.message, 'error'); return; }
+  showToast(`"${name}" saved`, 'success');
+  closeBadgeModal();
+  _badgeAdminCategoriesCache = null;
+  loadBadgesTab();
+}
+
+async function toggleBadgeActive(id, currentlyActive) {
+  const { error } = await db.from('badges').update({ is_active: !currentlyActive }).eq('id', id);
+  if (error) showToast('Failed: ' + error.message, 'error');
+  else loadBadgesTab();
+}
+
+async function deleteBadge(id, name) {
+  if (!confirm(`Delete badge "${name}"? All earned instances will also be removed.`)) return;
+  const { error } = await db.from('badges').delete().eq('id', id);
+  if (error) showToast('Failed: ' + error.message, 'error');
+  else { showToast(`"${name}" deleted`, 'success'); loadBadgesTab(); }
+}
+
 // ── Comparison Tab ─────────────────────────────────────────
 let compCharts = {};
 let activePeriod = 'all';
@@ -1864,8 +2153,11 @@ async function loadEmployeeAnalysis() {
   const stats     = calculateStats(logs);
   const level     = getUserLevel(stats.totalHours);
   const xp        = getXPProgress(stats.totalHours);
-  const badges    = getEarnedBadges(stats);
-  const earnedCount = badges.filter(b=>b.earned).length;
+  // Admin-defined badges, fetched + auto-synced from the live tables.
+  await syncUserBadges(uid, stats);
+  const { badges: activeBadges, earned: earnedSet } = await fetchUserBadges(uid);
+  const badges    = activeBadges.map(b => ({ ...b, earned: earnedSet.has(b.id) }));
+  const earnedCount = badges.filter(b => b.earned).length;
   const initials  = user.full_name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
   const heroInner = user.avatar_url
     ? `<img src="${user.avatar_url}" alt="${user.full_name}" onerror="this.outerHTML='${initials}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
