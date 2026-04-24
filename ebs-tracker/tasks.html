@@ -566,18 +566,6 @@ function renderAssignedAnalytics() {
     </div>`;
 }
 
-async function markTaskDone(id) {
-  if (!confirm('Mark this task as done?')) return;
-  const { error } = await db.from('priority_tasks').update({
-    status: 'done',
-    done_at: new Date().toISOString(),
-  }).eq('id', id);
-  if (error) { showToast('Failed: ' + error.message, 'error'); return; }
-  showToast('Task marked done ✅', 'success');
-  await loadTasks();
-  renderBoard();
-}
-
 // ── Admin user filter ──────────────────────────────────────
 function buildAdminFilter() {
   const tabs = document.getElementById('userFilterTabs');
@@ -747,7 +735,6 @@ function renderTaskCard(t) {
     </div>
     <div class="task-actions">
       ${onHold ? '' : `<button class="btn btn-success btn-sm" title="Move to Work Log" onclick="openLogModal('${t.id}','${titleEscaped}')"  style="white-space:nowrap;">📝 Log</button>`}
-      ${onHold || t.status === 'done' || t.status === 'logged' ? '' : `<button class="btn btn-secondary btn-sm" title="Mark done (no work log entry)" onclick="markTaskDone('${t.id}')" style="white-space:nowrap;">✓ Done</button>`}
       ${holdBtn}
       <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="openDeleteTaskModal('${t.id}','${titleEscaped}')">🗑️</button>
     </div>

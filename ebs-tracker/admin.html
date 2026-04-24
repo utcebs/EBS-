@@ -207,9 +207,9 @@
     </div>
 
     <style>
-      .comp-period-btn { padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--text-2);cursor:pointer;transition:.2s; }
-      .comp-period-btn:hover { color:var(--text-1); }
-      .comp-period-btn.active { background:var(--accent);color:#fff; }
+      /* .comp-period-btn rules live in style.css (with light-mode override).
+         Don't redefine them here — duplicating with `color:#fff` made the active
+         label invisible on the white gradient background in dark mode. */
       .emp-dash-card { border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--bg-card);overflow:hidden;display:flex;flex-direction:column; }
       .emp-dash-header { padding:18px 18px 14px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border); }
       .emp-dash-section { padding:14px 18px;border-bottom:1px solid var(--border); }
@@ -221,8 +221,9 @@
       .emp-dash-stat .l { font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-top:4px; }
       .trend-toggle { display:inline-flex;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:3px;gap:2px; }
       .trend-btn { padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;border:none;background:transparent;color:var(--text-3);cursor:pointer;transition:.15s; }
-      .trend-btn.active { background:var(--accent);color:#fff; }
+      .trend-btn.active { background:linear-gradient(135deg,var(--accent-dark),var(--accent));color:#080600; }
       .trend-btn:hover:not(.active) { color:var(--text-1); }
+      body.light-mode .trend-btn.active { background:linear-gradient(135deg,#5C4128,#7A5A38);color:#FAF9F6; }
     </style>
 
     <!-- TAB: EMPLOYEE ANALYSIS -->
@@ -1168,8 +1169,11 @@ function renderUserList() {
     const lvl       = getUserLevel(totalHrs);
     const initials  = u.full_name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
     const isSelf    = u.id === session.id;
+    const avatarInner = u.avatar_url
+      ? `<img src="${u.avatar_url}" alt="${u.full_name}" onerror="this.outerHTML='${initials}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
+      : initials;
     return `<div class="user-card">
-      <div class="user-avatar ${lvl.class}" data-user-id="${u.id}" style="width:40px;height:40px;font-size:13px;border-color:${lvl.color};background:linear-gradient(135deg,${lvl.color}33,${lvl.color}11)">${initials}</div>
+      <div class="user-avatar ${lvl.class}" data-user-id="${u.id}" style="width:40px;height:40px;font-size:13px;border-color:${lvl.color};background:linear-gradient(135deg,${lvl.color}33,${lvl.color}11);overflow:hidden;">${avatarInner}</div>
       <div class="user-card-info">
         <div class="user-card-name">${u.full_name}${u.role==='admin'?'<span class="admin-tag">ADMIN</span>':''}</div>
         <div class="user-card-meta">@${u.username} · ${lvl.icon} ${lvl.name} · ${totalHrs.toFixed(1)}h · ${userLogs.length} tasks</div>
@@ -1238,8 +1242,11 @@ async function viewUser(uid) {
   section.style.display = 'block';
   section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  const detailAvatar = user.avatar_url
+    ? `<img src="${user.avatar_url}" alt="${user.full_name}" onerror="this.outerHTML='${initials}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
+    : initials;
   document.getElementById('userDetailHeader').innerHTML = `
-    <div class="user-avatar ${lvl.class}" style="border-color:${lvl.color};background:linear-gradient(135deg,${lvl.color}33,${lvl.color}11)">${initials}</div>
+    <div class="user-avatar ${lvl.class}" data-user-id="${user.id}" style="border-color:${lvl.color};background:linear-gradient(135deg,${lvl.color}33,${lvl.color}11);overflow:hidden;">${detailAvatar}</div>
     <div>
       <div style="font-size:18px;font-weight:800;">${user.full_name}</div>
       <div style="font-size:13px;color:var(--text-2);">@${user.username} · <span class="level-badge ${lvl.class}" style="padding:3px 10px;font-size:12px;">${lvl.icon} ${lvl.name} · Lv.${lvl.level}</span></div>

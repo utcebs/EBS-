@@ -1220,11 +1220,13 @@ function ProjectDetail() {
       if (re) console.error('Risks fetch error:', re)
       setProject(p); setMilestones(m || []); setRisks(r || [])
 
-      // Secondary: employee hours on this project — depends on p.proj_unique_id
+      // Secondary: employee hours on this project — depends on p.proj_unique_id.
+      // Include user_id + profiles join so we can show landing-page avatars on
+      // the contributor cards. Falls back to team_member name for legacy rows.
       if (p?.proj_unique_id) {
         const { data: logs, error: le } = await supabasePublic
           .from('task_logs')
-          .select('team_member, hours_spent, log_date, task_project, task_description')
+          .select('user_id, team_member, hours_spent, log_date, task_project, task_description, profiles(id, full_name, avatar_url)')
           .eq('linked_project_id', p.proj_unique_id)
         if (le) console.error('Task logs fetch error:', le)
         else setHourLogs(logs || [])
@@ -1488,11 +1490,18 @@ function ProjectDetail() {
 
         {/* Employee hours on this project — portrait cards grid */}
         {(() => {
-          // Aggregate: per member → { hours, logs[], byDay{date:hours} }
+          // Aggregate: per member → { hours, logs[], byDay{date:hours}, avatar }
+          // Group by user_id when available so the same person logged under
+          // different team_member spellings still rolls up; fall back to the
+          // string key for legacy rows missing user_id.
           const byMember = {}
           hourLogs.forEach(l => {
-            const key = l.team_member || 'Unknown'
-            if (!byMember[key]) byMember[key] = { name: key, hours: 0, logs: [], byDay: {} }
+            const key = l.user_id || ('name:' + (l.team_member || 'Unknown'))
+            if (!byMember[key]) byMember[key] = {
+              name: l.profiles?.full_name || l.team_member || 'Unknown',
+              avatar: l.profiles?.avatar_url || null,
+              hours: 0, logs: [], byDay: {},
+            }
             const hrs = parseFloat(l.hours_spent || 0)
             byMember[key].hours += hrs
             byMember[key].logs.push(l)
@@ -1566,9 +1575,11 @@ function ProjectDetail() {
                       className="text-left bg-white rounded-2xl border border-surface-200 p-5 hover:border-brand-300 transition-all group"
                     >
                       <div className="flex items-center gap-3 mb-4">
-                        <div className="w-11 h-11 rounded-full flex items-center justify-center font-semibold text-sm text-white shadow-sm"
+                        <div className="w-11 h-11 rounded-full flex items-center justify-center font-semibold text-sm text-white shadow-sm overflow-hidden"
                           style={{ background: 'linear-gradient(135deg, #6366f1, #4338ca)' }}>
-                          {initials}
+                          {c.avatar
+                            ? <img src={c.avatar} alt={c.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.replaceWith(Object.assign(document.createTextNode(initials), {})) }} />
+                            : initials}
                         </div>
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-surface-800 truncate">{c.name}</div>
