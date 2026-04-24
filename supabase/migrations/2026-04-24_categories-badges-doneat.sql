@@ -93,13 +93,13 @@ CREATE TABLE IF NOT EXISTS badges (
   --   'custom'            -> free-form (evaluator returns false for now)
   condition_config JSONB       NOT NULL DEFAULT '{}'::jsonb,
   is_active        BOOLEAN     DEFAULT TRUE,
-  created_by       UUID        REFERENCES users(id),
+  created_by       UUID        REFERENCES profiles(id),
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE badges DISABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS user_badges (
-  user_id   UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id   UUID        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   badge_id  UUID        NOT NULL REFERENCES badges(id) ON DELETE CASCADE,
   earned_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, badge_id)
