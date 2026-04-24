@@ -302,6 +302,40 @@ function aggregateByWeek(logs, nWeeks = 8) {
   return Object.values(weeks);
 }
 
+/* ── Monthly aggregation (last N months including current) ──── */
+function aggregateByMonth(logs, nMonths = 6) {
+  const months = {};
+  const now = new Date();
+  for (let i = nMonths - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const label = `${MONTH_SHORT[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+    months[key] = { label, hours: 0, tasks: 0 };
+  }
+  logs.forEach(l => {
+    const d = new Date(l.log_date);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (months[key]) { months[key].hours += parseFloat(l.hours_spent || 0); months[key].tasks++; }
+  });
+  return Object.values(months);
+}
+
+/* ── Daily aggregation (last N days including today) ─────────── */
+function aggregateByDay(logs, nDays = 14) {
+  const days = {};
+  const now = new Date(); now.setHours(0,0,0,0);
+  for (let i = nDays - 1; i >= 0; i--) {
+    const d = new Date(now); d.setDate(d.getDate() - i);
+    const key = toDateStr(d);
+    const label = `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
+    days[key] = { label, hours: 0, tasks: 0 };
+  }
+  logs.forEach(l => {
+    if (days[l.log_date]) { days[l.log_date].hours += parseFloat(l.hours_spent || 0); days[l.log_date].tasks++; }
+  });
+  return Object.values(days);
+}
+
 /* ── CSV Export ───────────────────────────────────────────── */
 function exportToCSV(data, filename = 'export.csv') {
   if (!data || !data.length) { showToast('No data to export', 'info'); return; }
