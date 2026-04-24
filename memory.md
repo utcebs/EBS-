@@ -330,4 +330,80 @@ Everything below happened in one continuous working session. Captured here so fu
 - `ebs-tracker/js/config.js` — 10-level XP + rebalanced badges
 - `ebs-tracker/css/style.css` — monochrome CSS variables
 - `.github/workflows/deploy.yml` — Node 22, action v5
+
+---
+
+## 14. April 2026 rework — anti-leaderboard + admin-driven taxonomy
+
+Six-phase batch shipped in commits `a36d0c0` → `dcf11b0`. Theme of the release: **kill the competitive one-number ranking** (streaks, XP, hardcoded badges, Comparison "winner" highlights) and **give the admin actual control** over categories + badges instead of constants in `config.js`.
+
+### Phase 1 — React app polish
+- **Light/dark toggle** in the sidebar bottom (Sun/Moon pill). Flips `app-dark` on `<main>` per route. Persisted via `localStorage['ebs.theme']`. Landing always uses its own dark theme; toggle is hidden there.
+- **Total Cost KPI** removed from Dashboard. Grid dropped from 6 → 5 columns.
+- **Hours by Employee** in `ProjectDetail` is now a **portrait card grid** instead of a horizontal bar chart. Each card shows avatar, name, hours, a tiny inline-SVG sparkline of the user's daily contribution, and clicks through to the existing drill-down modal.
+
+### Phase 2 — Strip streaks + XP UI
+Removed Streak KPI cards from `performance.html` + `admin.html` user-detail. Removed XP bar + Level badge from sidebar (`utils.js::loadSidebarStats`) and performance hero. `getUserLevel` / `getXPProgress` / the `BADGES` array stay in `config.js` for now (only `getEarnedBadges` legacy shim still references them) — they can be deleted in a follow-up sweep. `maxStreak` is preserved in `calculateStats` because Phase 6 badges use it.
+
+### Phase 3 — Comparison page rewritten
+`admin.html::renderComparison` previously was a 4-section leaderboard (spotlights, ranked profiles, hours-vs-expected bars, shared radar/category/donut/weekly). Now it's a **side-by-side dashboard grid** where each employee gets an independent card; no rankings, no winner highlights. Per card:
+- Hours vs expected (bar + %)
+- Stat strip: Tasks · Badges · Active Days · Peak Day
+- Projects involved (resolved from `task_logs.linked_project_id` → `projects.project_name`)
+- Performance radar (per-axis normalised with sensible mins so a single low value doesn't look like total dominance)
+- Category Hours bar (drillable; uses dynamic `categoryHours` map so admin-added categories appear)
+- Hours Trend with Monthly / Weekly / Daily toggle (`aggregateByMonth`, `aggregateByWeek`, `aggregateByDay` in utils.js)
+
+### Phase 4 — Admin-managed categories
+**Schema** (`supabase/migrations/2026-04-24_categories-badges-doneat.sql`):
+- `categories (id, name, icon, sort_order, is_active, is_system)`
+- `subcategories (id, category_id FK, name, sort_order, is_active)`
+- Seeds Support / Testing / Project as `is_system=true`; copies subcategory rows from the legacy `support_subcategories` / `testing_subcategories` / `project_subcategories` tables (which are kept in place for rollback).
+- **Run this migration manually in the Supabase SQL Editor against project `hddfkkojfvmjuxsyhcgh`** (the real one — see §13). The same migration also covers Phase 5 + 6.
+
+**UI**: Settings tab in `admin.html` now lists primary categories with edit / soft-hide / delete + per-category subcategory CRUD. System categories cannot be hard-deleted, only hidden. `log.html` and `tasks.html` build their picker from `loadCategories()` (utils.js) — when the migration isn't applied yet, that helper falls back to the legacy 3 tables so nothing breaks. `task_logs.category` still stores the *name* string, not an FK, so old rows continue to resolve.
+
+### Phase 5 — Assigned-task analytics
+`priority_tasks.done_at` (TIMESTAMPTZ) added in the same migration; existing `done`/`logged` rows are backfilled from `updated_at`.
+
+`tasks.html` admin view shows a new **Assigned Tasks Analytics** card when the status filter is `done` / `logged` / `all`. KPIs: total assigned, on-time, late (with avg delay days), overdue still open. A **Per-Assignee Breakdown** disclosure expands into a per-user table. Only counts `assigned_by IS NOT NULL` rows — the admin's own personal todos don't pollute the analytics.
+
+`done_at` is stamped in two places:
+- New **✓ Done** button on each task card → `status='done'`, `done_at=now()`. Hidden once the task is already done/logged/on_hold.
+- Move-to-Log flow when the user ticks "completed" in the log modal → `status='logged'`, `done_at=now()`. Multi-day tasks logged without that checkbox stay `pending` so they can be logged against repeatedly.
+
+### Phase 6 — Admin-defined badges with auto-assignment
+**Schema**: `badges (id, name, description, icon, condition_type, condition_config jsonb, is_active, created_by)` + `user_badges (user_id, badge_id, earned_at)`. Three starter badges seeded (Century / Iron Worker / Marathoner).
+
+**Condition types** (admin picks via dropdown in the Badges tab modal; the type-specific inputs render dynamically):
+| Type | `condition_config` | Check |
+|---|---|---|
+| `total_hours` | `{threshold}` | `stats.totalHours >= threshold` |
+| `consecutive_days` | `{threshold}` | `stats.maxStreak >= threshold` |
+| `category_count` | `{category_id, threshold}` | count of `task_logs` with that category name ≥ threshold (the `id` is resolved to a name via the categories cache) |
+| `on_time_rate` | `{threshold_pct, min_tasks}` | `(on_time / closed) >= threshold_pct AND closed >= min_tasks` |
+| `custom` | free-form JSON | evaluator returns false; future-proof slot |
+
+**Evaluator + sync** in `utils.js`:
+- `evaluateBadge(badge, stats, ctx)` — pure function, no I/O.
+- `syncUserBadges(userId, stats, ctxOverrides)` — reads active badges + user_badges + categories, only fetches `task_logs` / `priority_tasks` if a badge actually needs them, INSERTs newly-earned rows. Returns the up-to-date earned Set.
+- `fetchUserBadges(userId)` — read-only display fetch used after sync.
+
+**Admin UI**: new Badges tab between Settings and Project Analytics. Each card shows live eligibility ("N users currently match"), edit / hide / delete / one-click **🔄 Sync** that re-evaluates every active badge across every user.
+
+**Display surfaces** (`performance.html` + `admin.html` Employee Analysis): both call `syncUserBadges` first, then `fetchUserBadges`, then render earned (full colour) vs locked (greyed). The static `BADGES` array in `config.js` is no longer read by either page; the legacy `getEarnedBadges` shim was kept for safety but is dead code now.
+
+### Files touched
+- React: `src/App.jsx`, `src/index.css`
+- Tracker: `ebs-tracker/admin.html`, `performance.html`, `tasks.html`, `log.html`, `dashboard.html`, `js/utils.js`
+- Schema: `supabase/migrations/2026-04-24_categories-badges-doneat.sql` (one file covers Phases 4 + 5 + 6)
+
+### Verification checklist (run after applying the SQL migration)
+1. Theme toggle persists across reloads and works on every project page.
+2. Dashboard has 5 KPI cards (no Total Cost). ProjectDetail Hours-by-Employee shows portrait cards with sparklines.
+3. No Streak KPIs anywhere. No XP bar in sidebar / performance hero.
+4. Comparison tab shows one independent card per user with all 9 dimensions; Monthly/Weekly/Daily toggle on the trend chart works.
+5. Settings → Categories: add "Training" with subcategories, soft-hide, restore. Log page shows the new category as a group; logging a task against it persists with `category='Training'`.
+6. tasks.html admin filter on "Logged" or "Done" reveals the Analytics card; per-assignee breakdown expands.
+7. Badges tab: create "Century" (`total_hours >= 100`), Sync. Visit My Performance as a user with > 100h — the badge appears as EARNED. SQL: `SELECT * FROM user_badges WHERE badge_id = '<id>'` shows the row.
 - Supabase — auto-confirm trigger added; Confirm Email toggle OFF
