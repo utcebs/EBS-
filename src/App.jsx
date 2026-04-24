@@ -13,7 +13,7 @@ import {
   RefreshCw, Search, Menu, AlertCircle, ExternalLink, BarChart3,
   ListChecks, FileWarning, Info, ChevronDown, ChevronUp,
   Upload, Download, FileSpreadsheet, Presentation, Sparkles,
-  FileText, UserCog, User
+  FileText, UserCog, User, Sun, Moon
 } from 'lucide-react'
 import PptxGenJS from 'pptxgenjs'
 import * as XLSX from 'xlsx'
@@ -600,7 +600,17 @@ function Layout() {
   const { user, signOut, isAdmin } = useAuth()
   const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('ebs.theme') === 'light' ? 'light' : 'dark' }
+    catch { return 'dark' }
+  })
   const isLanding = location.pathname === '/'
+  const darkClass = (!isLanding && theme === 'dark') ? 'app-dark' : ''
+
+  // Persist theme choice
+  useEffect(() => {
+    try { localStorage.setItem('ebs.theme', theme) } catch {}
+  }, [theme])
 
   // Scroll to top on every route change. The actual scroll container is
   // <main id="main-scroll"> (overflow-y-auto) — window scroll is a fallback.
@@ -680,6 +690,21 @@ function Layout() {
         </div>
       </nav>
       <div className="px-3 py-4 border-t border-surface-700/50">
+        {/* Theme toggle — always visible, works on landing (no-op) and data pages */}
+        <button
+          onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+          className="flex items-center justify-between gap-3 px-3 py-2.5 mb-2 rounded-xl text-sm font-medium text-surface-400 hover:text-white hover:bg-surface-800 w-full transition-all"
+          title="Toggle theme"
+          aria-label="Toggle theme"
+        >
+          <span className="flex items-center gap-3">
+            {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
+            {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+          </span>
+          <span className="relative w-9 h-5 rounded-full bg-surface-800">
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${theme === 'dark' ? 'left-0.5' : 'left-[18px]'}`} />
+          </span>
+        </button>
         {isAdmin ? (
           <div className="space-y-1">
             <Link to="/admin/team" onClick={() => setSidebarOpen(false)}
@@ -711,7 +736,7 @@ function Layout() {
     </aside>
 
     {/* Main */}
-    <main id="main-scroll" className={`flex-1 overflow-y-auto pb-20 lg:pb-0 ${isLanding ? '' : 'app-dark'}`}>
+    <main id="main-scroll" className={`flex-1 overflow-y-auto pb-20 lg:pb-0 ${darkClass}`}>
 
       <div className={isLanding ? '' : 'px-4 pt-20 pb-8 sm:px-6 lg:px-8'}>
         <Routes>
@@ -765,7 +790,6 @@ function Dashboard() {
   const atRisk = projects.filter(p => p.status === 'At Risk' || p.status === 'Delayed').length
   const completed = projects.filter(p => p.status === 'Completed').length
   const onHold = projects.filter(p => p.status === 'On Hold').length
-  const totalCost = projects.reduce((s, p) => s + (parseFloat(p.total_cost_kwd) || 0), 0)
 
   const byOwner = {}
   projects.forEach(p => { const o = p.business_owner || 'Unassigned'; byOwner[o] = (byOwner[o] || 0) + 1 })
@@ -795,7 +819,6 @@ function Dashboard() {
     { label: 'At Risk / Delayed', value: atRisk, icon: AlertTriangle, color: 'bg-red-500', onClick: () => { const f = projects.filter(p => p.status === 'At Risk' || p.status === 'Delayed'); setDrillDown({ title: `At Risk & Delayed (${f.length})`, projects: f }) } },
     { label: 'Completed', value: completed, icon: Target, color: 'bg-blue-500', onClick: () => drillStatus('Completed') },
     { label: 'On Hold', value: onHold, icon: Pause, color: 'bg-slate-400', onClick: () => drillStatus('On Hold') },
-    { label: 'Total Cost (KWD)', value: totalCost.toLocaleString(), icon: BarChart3, color: 'bg-violet-500', onClick: () => { const f = projects.filter(p => parseFloat(p.total_cost_kwd) > 0); setDrillDown({ title: `Projects with Budget (${f.length})`, projects: f }) } },
   ]
 
   // Clickable pie chart handler
@@ -825,7 +848,7 @@ function Dashboard() {
     </div>
 
     {/* Summary Cards — all clickable */}
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-8 stagger">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8 stagger">
       {summaryCards.map(({ label, value, icon: Icon, color, onClick }) => (
         <div key={label} onClick={onClick}
           className="bg-white rounded-2xl p-4 border border-surface-200 shadow-sm animate-fade-in hover:shadow-md hover:border-brand-200 transition-all cursor-pointer group">
@@ -1463,18 +1486,24 @@ function ProjectDetail() {
           </div>
         )}
 
-        {/* Employee hours on this project (from EBS Tracker task_logs) */}
+        {/* Employee hours on this project — portrait cards grid */}
         {(() => {
+          // Aggregate: per member → { hours, logs[], byDay{date:hours} }
           const byMember = {}
           hourLogs.forEach(l => {
             const key = l.team_member || 'Unknown'
-            byMember[key] = (byMember[key] || 0) + parseFloat(l.hours_spent || 0)
+            if (!byMember[key]) byMember[key] = { name: key, hours: 0, logs: [], byDay: {} }
+            const hrs = parseFloat(l.hours_spent || 0)
+            byMember[key].hours += hrs
+            byMember[key].logs.push(l)
+            if (l.log_date) byMember[key].byDay[l.log_date] = (byMember[key].byDay[l.log_date] || 0) + hrs
           })
-          const hoursData = Object.entries(byMember)
-            .map(([name, value]) => ({ name, value: Math.round(value * 10) / 10 }))
-            .sort((a, b) => b.value - a.value)
-          const totalHours = hoursData.reduce((s, d) => s + d.value, 0)
-          if (hoursData.length === 0) {
+          const contributors = Object.values(byMember)
+            .map(m => ({ ...m, hours: Math.round(m.hours * 10) / 10 }))
+            .sort((a, b) => b.hours - a.hours)
+          const totalHours = contributors.reduce((s, d) => s + d.hours, 0)
+
+          if (contributors.length === 0) {
             return (
               <div className="bg-white rounded-2xl border border-surface-200 p-6 mt-6">
                 <h3 className="text-sm font-semibold text-surface-700 mb-1">Hours Logged by Employee</h3>
@@ -1482,33 +1511,80 @@ function ProjectDetail() {
               </div>
             )
           }
+
+          // Tiny SVG sparkline — daily contribution polyline
+          const sparkline = (byDay) => {
+            const days = Object.keys(byDay).sort()
+            if (days.length < 2) {
+              // single day → draw a flat line so card layout is consistent
+              return <div className="h-10 flex items-end gap-[2px]">
+                <span className="inline-block w-1 bg-brand-500/70 rounded-sm" style={{ height: '60%' }} />
+              </div>
+            }
+            const vals = days.map(d => byDay[d])
+            const max = Math.max(...vals)
+            const W = 140, H = 36
+            const pts = vals.map((v, i) => {
+              const x = (i / (vals.length - 1)) * W
+              const y = H - (max > 0 ? (v / max) * (H - 6) : 0) - 3
+              return `${x.toFixed(1)},${y.toFixed(1)}`
+            }).join(' ')
+            const last = pts.split(' ').pop().split(',')
+            return (
+              <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-10 overflow-visible">
+                <defs>
+                  <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#818cf8" stopOpacity="0.5" />
+                    <stop offset="100%" stopColor="#818cf8" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <polygon fill="url(#spark-fill)" points={`0,${H} ${pts} ${W},${H}`} />
+                <polyline fill="none" stroke="#818cf8" strokeWidth="1.5" points={pts} strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx={last[0]} cy={last[1]} r="2.5" fill="#818cf8" />
+              </svg>
+            )
+          }
+
           return (
             <div className="bg-white rounded-2xl border border-surface-200 p-6 mt-6">
               <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                 <h3 className="text-sm font-semibold text-surface-700">Hours Logged by Employee</h3>
                 <div className="flex gap-3 text-xs text-surface-500">
-                  <span><strong className="text-surface-700">{hoursData.length}</strong> contributors</span>
+                  <span><strong className="text-surface-700">{contributors.length}</strong> contributors</span>
                   <span><strong className="text-surface-700">{totalHours.toFixed(1)}</strong> total hours</span>
                 </div>
               </div>
-              <p className="text-xs text-surface-400 mb-3">Aggregated from EBS Tracker task logs linked to this project. Click a bar to see individual entries.</p>
-              <ResponsiveContainer width="100%" height={Math.max(180, hoursData.length * 36)}>
-                <BarChart data={hoursData} layout="vertical" margin={{ left: 10, right: 30 }}>
-                  <XAxis type="number" allowDecimals={true} tick={{ fontSize: 11 }} />
-                  <YAxis dataKey="name" type="category" width={130} tick={{ fontSize: 10 }} />
-                  <RTooltip formatter={(v) => [`${v} h`, 'Hours']} />
-                  <Bar dataKey="value" fill="#4c6ef5" radius={[0, 6, 6, 0]} barSize={18}
-                    onClick={(d) => {
-                      const logs = hourLogs.filter(l => (l.team_member || 'Unknown') === d.name)
-                      setDashDrill({
-                        title: `${d.name} — ${d.value.toFixed(1)} h`,
-                        items: logs,
-                        type: 'hour_logs',
-                      })
-                    }}
-                    cursor="pointer" />
-                </BarChart>
-              </ResponsiveContainer>
+              <p className="text-xs text-surface-400 mb-5">Click a card to see that employee's individual log entries.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {contributors.map(c => {
+                  const initials = c.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+                  const pct = totalHours > 0 ? Math.round((c.hours / totalHours) * 100) : 0
+                  return (
+                    <button
+                      key={c.name}
+                      onClick={() => setDashDrill({ title: `${c.name} — ${c.hours.toFixed(1)} h`, items: c.logs, type: 'hour_logs' })}
+                      className="text-left bg-white rounded-2xl border border-surface-200 p-5 hover:border-brand-300 transition-all group"
+                    >
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-11 h-11 rounded-full flex items-center justify-center font-semibold text-sm text-white shadow-sm"
+                          style={{ background: 'linear-gradient(135deg, #6366f1, #4338ca)' }}>
+                          {initials}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-surface-800 truncate">{c.name}</div>
+                          <div className="text-[11px] text-surface-500">{c.logs.length} {c.logs.length === 1 ? 'entry' : 'entries'}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-baseline gap-1 mb-1">
+                        <span className="font-display text-3xl font-bold text-surface-900">{c.hours.toFixed(1)}</span>
+                        <span className="text-xs font-mono text-surface-500">h</span>
+                        <span className="ml-auto text-[10px] uppercase tracking-widest text-surface-400">{pct}%</span>
+                      </div>
+                      {sparkline(c.byDay)}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )
         })()}
