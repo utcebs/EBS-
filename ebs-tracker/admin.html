@@ -1556,6 +1556,13 @@ function renderRecordsTable() {
 // reason, then status='rejected' + rejection_reason. Refresh count
 // badge after every action.
 let _rejectingApprovalId = null;
+const _expandedApprovalIds = new Set();
+
+function toggleApprovalDetails(id) {
+  if (_expandedApprovalIds.has(id)) _expandedApprovalIds.delete(id);
+  else _expandedApprovalIds.add(id);
+  loadApprovalsTab();
+}
 
 async function refreshApprovalsCountBadge() {
   try {
@@ -1575,7 +1582,7 @@ async function loadApprovalsTab() {
   let pending = [];
   try {
     const { data, error } = await db.from('task_logs')
-      .select('id, log_date, task_project, accomplishment, hours_spent, user_id, profiles!user_id(full_name)')
+      .select('id, log_date, task_project, task_description, accomplishment, comments_notes, hours_spent, category, sub_category, user_id, profiles!user_id(full_name)')
       .eq('accomplishment_status', 'pending')
       .order('log_date', { ascending: false });
     if (error) throw error;
@@ -1594,23 +1601,44 @@ async function loadApprovalsTab() {
 
   list.innerHTML = pending.map(l => {
     const name = l.profiles?.full_name || '—';
+    const isOpen = _expandedApprovalIds.has(l.id);
+    const hasExtra = (l.task_description && l.task_description.trim()) || (l.comments_notes && l.comments_notes.trim());
     return `
-      <div class="card" style="padding:14px 18px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:240px;">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
-            <span style="font-weight:800;font-size:14px;">👤 ${name}</span>
-            <span style="font-size:11px;color:var(--text-3);">📅 ${formatDate(l.log_date)}</span>
-            <span style="font-size:11px;color:var(--text-3);">⏱️ ${parseFloat(l.hours_spent).toFixed(1)}h</span>
-            <span style="font-size:11px;color:var(--text-3);">📋 ${truncate(l.task_project, 50)}</span>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div style="padding:14px 18px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:240px;cursor:${hasExtra ? 'pointer' : 'default'};" onclick="${hasExtra ? `toggleApprovalDetails('${l.id}')` : ''}">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
+              <span style="font-weight:800;font-size:14px;">👤 ${name}</span>
+              <span style="font-size:11px;color:var(--text-3);">📅 ${formatDate(l.log_date)}</span>
+              <span style="font-size:11px;color:var(--text-3);">⏱️ ${parseFloat(l.hours_spent).toFixed(1)}h</span>
+              ${l.category ? categoryBadge(l.category) : ''}
+              <span style="font-size:11px;color:var(--text-3);">📋 ${truncate(l.task_project, 50)}</span>
+              ${hasExtra ? `<span style="font-size:11px;color:var(--text-3);margin-left:auto;">${isOpen ? '▼ Hide details' : '▶ Show details'}</span>` : ''}
+            </div>
+            <div style="font-size:14px;line-height:1.4;color:var(--text-1);background:var(--bg-surface);padding:10px 12px;border-radius:var(--radius);border-left:3px solid var(--warning);">
+              "${l.accomplishment || ''}"
+            </div>
           </div>
-          <div style="font-size:14px;line-height:1.4;color:var(--text-1);background:var(--bg-surface);padding:10px 12px;border-radius:var(--radius);border-left:3px solid var(--warning);">
-            "${l.accomplishment || ''}"
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button class="btn btn-success btn-sm" onclick="approveApproval('${l.id}')">✓ Approve</button>
+            <button class="btn btn-danger btn-sm" onclick="openRejectModal('${l.id}','${name.replace(/'/g,"\\'")}')">⛔ Reject</button>
           </div>
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0;">
-          <button class="btn btn-success btn-sm" onclick="approveApproval('${l.id}')">✓ Approve</button>
-          <button class="btn btn-danger btn-sm" onclick="openRejectModal('${l.id}','${name.replace(/'/g,"\\'")}')">⛔ Reject</button>
-        </div>
+        ${isOpen ? `
+          <div style="padding:0 18px 14px;border-top:1px solid var(--border);background:rgba(0,0,0,0.02);">
+            ${l.task_description && l.task_description.trim() ? `
+              <div style="margin-top:12px;">
+                <div style="font-size:10px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">📝 Task Description</div>
+                <div style="font-size:13px;line-height:1.5;color:var(--text-2);">${l.task_description}</div>
+              </div>` : ''}
+            ${l.comments_notes && l.comments_notes.trim() ? `
+              <div style="margin-top:12px;">
+                <div style="font-size:10px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">💬 Comments / Notes</div>
+                <div style="font-size:13px;line-height:1.5;color:var(--text-2);">${l.comments_notes}</div>
+              </div>` : ''}
+            ${l.sub_category ? `
+              <div style="margin-top:12px;font-size:11px;color:var(--text-3);">Sub-category: <strong style="color:var(--text-2);">${l.sub_category}</strong></div>` : ''}
+          </div>` : ''}
       </div>`;
   }).join('');
 }
@@ -2415,6 +2443,30 @@ async function loadEmployeeAnalysis() {
       <div class="chart-card"><div class="card-title">📈 Weekly Hours</div><div class="chart-container"><canvas id="analysisWeeklyChart"></canvas></div></div>
       <div class="chart-card"><div class="card-title">🍩 Category Split</div><div class="chart-container"><canvas id="analysisCatChart"></canvas></div></div>
     </div>
+
+    <!-- Approved achievements (logged accomplishments) -->
+    ${(() => {
+      const approved = logs
+        .filter(l => l.accomplishment && l.accomplishment.trim() && (!l.accomplishment_status || l.accomplishment_status === 'approved'))
+        .sort((a,b) => b.log_date.localeCompare(a.log_date));
+      return `
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-title-lg">🏆 Approved Achievements <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${approved.length})</span></div>
+          ${approved.length === 0
+            ? '<div style="font-size:12px;color:var(--text-3);padding:14px;background:var(--bg-surface);border:1px dashed var(--border);border-radius:var(--radius-lg);">No approved achievements yet for this employee.</div>'
+            : `<div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;">
+                ${approved.map(l => `
+                  <div style="padding:10px 14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius);">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;">
+                      <span style="font-size:11px;color:var(--text-3);font-weight:600;">📅 ${formatDate(l.log_date)}</span>
+                      <span style="font-size:11px;color:var(--text-3);">📋 ${l.task_project || '—'}</span>
+                      ${categoryBadge(l.category)}
+                    </div>
+                    <div style="font-size:13px;color:var(--text-1);line-height:1.4;">"${l.accomplishment}"</div>
+                  </div>`).join('')}
+              </div>`}
+        </div>`;
+    })()}
 
     <!-- Badges -->
     <div class="card">

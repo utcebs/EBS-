@@ -146,6 +146,20 @@
   </div>
 </div>
 
+<!-- View-only log details modal -->
+<div class="modal-backdrop" id="viewLogModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h2 class="modal-title">📋 Log Details</h2>
+      <button class="modal-close" onclick="closeViewModal()">✕</button>
+    </div>
+    <div id="viewLogBody" style="display:flex;flex-direction:column;gap:14px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-secondary" onclick="closeViewModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Delete confirm Modal -->
 <div class="modal-backdrop" id="deleteModal">
   <div class="modal" style="max-width:400px;">
@@ -338,22 +352,57 @@
            </div>`
         : `<span style="font-size:11px;color:var(--text-3)">View only</span>`;
       const rowClass = l.is_completed ? 'row-completed' : '';
-      return `<tr class="${rowClass}">
+      // Row is clickable → opens view modal. Edit/Delete buttons stop
+      // propagation via inline onclick so they don't double-trigger.
+      return `<tr class="${rowClass}" style="cursor:pointer;" onclick="openViewModal('${l.id}')">
         <td class="td-sm">${formatDate(l.log_date)}</td>
         <td><strong>${l.team_member || l.profiles?.full_name || '—'}</strong></td>
         <td>${truncate(l.task_project, 40)}</td>
         <td>${categoryBadge(l.category)}<span style="font-size:11px;color:var(--text-3);display:block;margin-top:2px;">${l.sub_category||''}</span></td>
         <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
-        <td style="text-align:center;">
+        <td style="text-align:center;" onclick="event.stopPropagation()">
           ${canEdit
             ? `<input type="checkbox" ${l.is_completed?'checked':''} onchange="toggleCompleted('${l.id}',this.checked)" style="width:16px;height:16px;accent-color:var(--success);cursor:pointer;" title="Mark as completed">`
             : (l.is_completed ? '<span class="completed-badge">✅ Done</span>' : '—')}
         </td>
         <td class="td-sm">${truncate(displayAccomplishment(l), 45)}</td>
-        <td>${actionBtns}</td>
+        <td onclick="event.stopPropagation()">${actionBtns}</td>
       </tr>`;
     }).join('');
   }
+
+  // ── View-only log modal ───────────────────────────────────
+  function openViewModal(id) {
+    const l = allLogs.find(x => x.id === id);
+    if (!l) return;
+    const body = document.getElementById('viewLogBody');
+    const accStatus = l.accomplishment_status;
+    const accBadge = accStatus === 'pending' ? '<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:rgba(245,158,11,0.18);color:var(--warning);font-size:10px;font-weight:800;letter-spacing:.04em;margin-left:6px;">🕒 PENDING</span>'
+      : accStatus === 'rejected' ? '<span style="display:inline-block;padding:2px 8px;border-radius:4px;background:rgba(239,68,68,0.18);color:var(--p-urgent);font-size:10px;font-weight:800;letter-spacing:.04em;margin-left:6px;">⛔ REJECTED</span>'
+      : '';
+    const fieldRow = (label, value) => value && String(value).trim()
+      ? `<div><div style="font-size:10px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">${label}</div><div style="font-size:13px;color:var(--text-1);line-height:1.5;white-space:pre-wrap;">${value}</div></div>`
+      : '';
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--text-3);font-weight:600;">📅 ${formatDate(l.log_date)}</span>
+        <span style="font-size:12px;color:var(--text-3);">⏱️ ${parseFloat(l.hours_spent).toFixed(1)}h</span>
+        ${categoryBadge(l.category)}
+        ${l.sub_category ? `<span style="font-size:11px;color:var(--text-3);">${l.sub_category}</span>` : ''}
+        ${l.is_completed ? '<span class="completed-badge" style="font-size:10px;">✅ Completed</span>' : ''}
+      </div>
+      ${fieldRow('📋 Task / Project', l.task_project)}
+      ${fieldRow('📝 Task Description', l.task_description)}
+      <div>
+        <div style="font-size:10px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">🏆 Key Accomplishment ${accBadge}</div>
+        <div style="font-size:13px;color:var(--text-1);line-height:1.5;white-space:pre-wrap;">${l.accomplishment && l.accomplishment.trim() ? (accStatus === 'pending' ? l.accomplishment : displayAccomplishment(l)) : '<span style="color:var(--text-3);">—</span>'}</div>
+        ${accStatus === 'rejected' && l.rejection_reason ? `<div style="font-size:11px;color:var(--p-urgent);margin-top:4px;font-weight:600;">Reason: ${l.rejection_reason}</div>` : ''}
+      </div>
+      ${fieldRow('💬 Comments / Notes', l.comments_notes)}
+    `;
+    document.getElementById('viewLogModal').classList.add('open');
+  }
+  function closeViewModal() { document.getElementById('viewLogModal').classList.remove('open'); }
 
   // ── Edit modal ────────────────────────────────────────────
   function openEditModal(id) {

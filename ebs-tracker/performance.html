@@ -378,6 +378,30 @@ async function loadPerformance() {
       </div>
     </div>
 
+    <!-- ── Achievements (approved accomplishments) ──────────── -->
+    ${(() => {
+      const approved = logs
+        .filter(l => l.accomplishment && l.accomplishment.trim() && (!l.accomplishment_status || l.accomplishment_status === 'approved'))
+        .sort((a,b) => b.log_date.localeCompare(a.log_date));
+      return `
+        <div class="card fade-in">
+          <div class="card-title-lg">🏆 Approved Achievements <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${approved.length})</span></div>
+          ${approved.length === 0
+            ? '<div style="font-size:12px;color:var(--text-3);padding:14px;background:var(--bg-surface);border:1px dashed var(--border);border-radius:var(--radius-lg);">No approved achievements yet. Add a Key Accomplishment when you log a task — admin reviews then approves.</div>'
+            : `<div style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;">
+                ${approved.map(l => `
+                  <div style="padding:10px 14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius);">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;">
+                      <span style="font-size:11px;color:var(--text-3);font-weight:600;">📅 ${formatDate(l.log_date)}</span>
+                      <span style="font-size:11px;color:var(--text-3);">📋 ${l.task_project || '—'}</span>
+                      ${categoryBadge(l.category)}
+                    </div>
+                    <div style="font-size:13px;color:var(--text-1);line-height:1.4;">"${l.accomplishment}"</div>
+                  </div>`).join('')}
+              </div>`}
+        </div>`;
+    })()}
+
     <!-- ── Badges ───────────────────────────────────────────── -->
     <div class="card fade-in">
       <div class="card-title-lg">🏅 Achievement Badges <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${earnedCount}/${badges.length} earned)</span></div>
