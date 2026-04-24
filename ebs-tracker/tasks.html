@@ -143,11 +143,20 @@
       <!-- Per-employee leaderboard -->
       <div class="card">
         <div class="card-title-lg">🏆 Completion Leaderboard</div>
-        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Sorted by completion rate (completed ÷ total assigned).</div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Sorted by on-time rate. Click any number to see the underlying tasks.</div>
         <div class="table-wrapper" style="border:none;">
           <table>
             <thead>
-              <tr><th>Employee</th><th style="text-align:center;">Assigned</th><th style="text-align:center;color:var(--success);">Completed</th><th style="text-align:center;color:#60a5fa;">Active</th><th style="text-align:center;color:var(--p-urgent);">Overdue</th><th style="text-align:center;color:var(--warning);">On Hold</th><th style="text-align:center;">Completion</th></tr>
+              <tr>
+                <th>Employee</th>
+                <th style="text-align:center;">Assigned</th>
+                <th style="text-align:center;color:var(--success);">On Time</th>
+                <th style="text-align:center;color:var(--warning);">Late</th>
+                <th style="text-align:center;color:#60a5fa;">Active</th>
+                <th style="text-align:center;color:var(--p-urgent);">Overdue Open</th>
+                <th style="text-align:center;color:#f59e0b;">On Hold</th>
+                <th style="text-align:center;">On-Time Rate</th>
+              </tr>
             </thead>
             <tbody id="tcaLeaderboardBody"></tbody>
           </table>
@@ -396,6 +405,20 @@
     <div style="display:flex;gap:12px;justify-content:flex-end;">
       <button class="btn btn-secondary" onclick="closeAssignModal()">Cancel</button>
       <button class="btn btn-primary" id="assignTaskBtn2" onclick="saveAssignedTask()">📋 Assign Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Task Completion Analysis drill-down modal ── -->
+<div class="modal-backdrop" id="tcaDrillModal">
+  <div class="modal" style="max-width:820px;">
+    <div class="modal-header">
+      <h2 class="modal-title" id="tcaDrillTitle">Tasks</h2>
+      <button class="modal-close" onclick="closeTcaDrill()">✕</button>
+    </div>
+    <div id="tcaDrillBody" style="max-height:70vh;overflow-y:auto;"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+      <button class="btn btn-secondary" onclick="closeTcaDrill()">Close</button>
     </div>
   </div>
 </div>
@@ -653,9 +676,35 @@ function switchTaskView(view) {
 }
 
 // ── Task Completion Analysis (admin dashboard) ─────────────
-// Aggregates every assigned task (assigned_by NOT NULL) by status and
-// by assignee. Renders KPI strip + stacked bar chart per-employee +
-// status donut + leaderboard table sorted by completion rate.
+// 5 buckets per task:
+//   on_time        — done/logged AND (no due_date OR done_at ≤ due_date)
+//   completed_late — done/logged AND done_at > due_date
+//   active         — pending AND not past due
+//   overdue_open   — pending AND past due
+//   on_hold        — status='on_hold'
+// Every visual (KPIs, stacked bar, donut, leaderboard cell) is clickable
+// and opens the shared drill-down modal with the matching task list.
+const TCA_BUCKETS = {
+  on_time:        { label: 'On Time',        color: 'rgba(34,197,94,.85)',  solid: 'var(--success)' },
+  completed_late: { label: 'Completed Late', color: 'rgba(245,158,11,.85)', solid: 'var(--warning)' },
+  active:         { label: 'Active',         color: 'rgba(96,165,250,.85)', solid: '#60a5fa' },
+  overdue_open:   { label: 'Overdue Open',   color: 'rgba(239,68,68,.85)',  solid: 'var(--p-urgent)' },
+  on_hold:        { label: 'On Hold',        color: 'rgba(234,179,8,.85)',  solid: '#f59e0b' },
+};
+
+function tcaBucket(t, today) {
+  const closed = t.status === 'done' || t.status === 'logged';
+  if (closed) {
+    if (!t.due_date || !t.done_at) return 'on_time'; // closed but no due date → count as on-time
+    const due  = new Date(t.due_date); due.setHours(0,0,0,0);
+    const done = new Date(t.done_at); done.setHours(0,0,0,0);
+    return done <= due ? 'on_time' : 'completed_late';
+  }
+  if (t.status === 'on_hold') return 'on_hold';
+  if (t.due_date && new Date(t.due_date) < today) return 'overdue_open';
+  return 'active';
+}
+
 function renderCompletionAnalysis() {
   if (session.role !== 'admin') return;
   Object.values(_tcaCharts).forEach(c => { try { c.destroy(); } catch(e){} });
@@ -663,62 +712,69 @@ function renderCompletionAnalysis() {
 
   const today = new Date(); today.setHours(0,0,0,0);
   const pool = allTasks.filter(t => t.assigned_by);
+  const tagged = pool.map(t => ({ ...t, _bucket: tcaBucket(t, today) }));
 
-  // Bucket each task by status
-  const bucket = (t) => {
-    if (t.status === 'done' || t.status === 'logged') return 'completed';
-    if (t.status === 'on_hold') return 'on_hold';
-    if (t.due_date && new Date(t.due_date) < today)   return 'overdue';
-    return 'active';
-  };
-  const totals = { completed: 0, active: 0, overdue: 0, on_hold: 0 };
-  pool.forEach(t => { totals[bucket(t)]++; });
+  const totals = { on_time:0, completed_late:0, active:0, overdue_open:0, on_hold:0 };
+  tagged.forEach(t => { totals[t._bucket]++; });
   const assigned = pool.length;
-  const completionRate = assigned ? Math.round((totals.completed / assigned) * 100) : 0;
+  const completedAny = totals.on_time + totals.completed_late;
+  const onTimeRate = assigned ? Math.round((totals.on_time / assigned) * 100) : 0;
 
-  // KPI strip
-  const kpi = (label, val, color) => `
-    <div style="padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid ${color};border-radius:var(--radius-lg);">
+  // Avg days late (for the completed_late bucket)
+  let totalDelay = 0;
+  tagged.filter(t => t._bucket === 'completed_late').forEach(t => {
+    const due  = new Date(t.due_date); due.setHours(0,0,0,0);
+    const done = new Date(t.done_at); done.setHours(0,0,0,0);
+    totalDelay += Math.floor((done - due) / 86400000);
+  });
+  const avgDelay = totals.completed_late ? Math.round((totalDelay / totals.completed_late) * 10) / 10 : 0;
+
+  // KPI strip — every card is clickable
+  const kpi = (label, val, color, bucket, extra) => `
+    <div onclick="${bucket ? `openTcaDrill('${bucket}')` : ''}" style="padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid ${color};border-radius:var(--radius-lg);${bucket ? 'cursor:pointer;transition:.15s;' : ''}" ${bucket ? 'onmouseover="this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.transform=\'\'"' : ''}>
       <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;">${label}</div>
-      <div style="font-size:24px;font-weight:800;color:${color};margin-top:4px;">${val}</div>
+      <div style="font-size:24px;font-weight:800;color:${color};margin-top:4px;">${val}${extra ? `<span style="font-size:11px;color:var(--text-3);font-weight:600;margin-left:6px;">${extra}</span>` : ''}</div>
     </div>`;
   document.getElementById('tcaKPIs').innerHTML = [
-    kpi('Total Assigned',  assigned,          'var(--text-1)'),
-    kpi('Completed',       totals.completed,  'var(--success)'),
-    kpi('Active',          totals.active,     '#60a5fa'),
-    kpi('Overdue',         totals.overdue,    'var(--p-urgent)'),
-    kpi('On Hold',         totals.on_hold,    'var(--warning)'),
-    kpi('Completion Rate', completionRate + '%', completionRate >= 75 ? 'var(--success)' : completionRate >= 50 ? 'var(--warning)' : 'var(--p-urgent)'),
+    kpi('Total Assigned',  assigned,                    'var(--text-1)',      'all'),
+    kpi('On Time',         totals.on_time,              TCA_BUCKETS.on_time.solid,        'on_time'),
+    kpi('Completed Late',  totals.completed_late,       TCA_BUCKETS.completed_late.solid, 'completed_late', avgDelay ? `avg ${avgDelay}d` : ''),
+    kpi('Active',          totals.active,               TCA_BUCKETS.active.solid,         'active'),
+    kpi('Overdue · Open',  totals.overdue_open,         TCA_BUCKETS.overdue_open.solid,   'overdue_open'),
+    kpi('On Hold',         totals.on_hold,              TCA_BUCKETS.on_hold.solid,        'on_hold'),
+    kpi('On-Time Rate',    onTimeRate + '%',            onTimeRate >= 75 ? 'var(--success)' : onTimeRate >= 50 ? 'var(--warning)' : 'var(--p-urgent)'),
   ].join('');
 
-  // Per-employee aggregation (only employees with ≥1 assigned task)
+  // Per-employee aggregation
   const byUser = {};
-  pool.forEach(t => {
+  tagged.forEach(t => {
     const uid = t.user_id;
     if (!byUser[uid]) {
       const u = allUsers.find(x => x.id === uid);
-      byUser[uid] = { id: uid, name: u?.full_name || '—', completed:0, active:0, overdue:0, on_hold:0, total:0 };
+      byUser[uid] = { id: uid, name: u?.full_name || '—', on_time:0, completed_late:0, active:0, overdue_open:0, on_hold:0, total:0 };
     }
-    byUser[uid][bucket(t)]++;
+    byUser[uid][t._bucket]++;
     byUser[uid].total++;
   });
   const rows = Object.values(byUser)
-    .map(r => ({ ...r, rate: r.total ? Math.round((r.completed / r.total) * 100) : 0 }))
+    .map(r => ({ ...r, rate: r.total ? Math.round((r.on_time / r.total) * 100) : 0 }))
     .sort((a,b) => b.rate - a.rate || b.total - a.total);
 
-  // Tasks per Employee — horizontal stacked bar
+  const bucketOrder = ['on_time','completed_late','active','overdue_open','on_hold'];
+
+  // Tasks per Employee — horizontal stacked bar, click a segment → drill
   const perEl = document.getElementById('tcaPerEmployeeChart');
   if (perEl) {
     _tcaCharts.perEmployee = new Chart(perEl, {
       type: 'bar',
       data: {
         labels: rows.map(r => r.name),
-        datasets: [
-          { label: 'Completed', data: rows.map(r => r.completed), backgroundColor: 'rgba(34,197,94,.85)' },
-          { label: 'Active',    data: rows.map(r => r.active),    backgroundColor: 'rgba(96,165,250,.85)' },
-          { label: 'Overdue',   data: rows.map(r => r.overdue),   backgroundColor: 'rgba(239,68,68,.85)' },
-          { label: 'On Hold',   data: rows.map(r => r.on_hold),   backgroundColor: 'rgba(245,158,11,.85)' },
-        ],
+        datasets: bucketOrder.map(b => ({
+          label: TCA_BUCKETS[b].label,
+          data: rows.map(r => r[b]),
+          backgroundColor: TCA_BUCKETS[b].color,
+          _bucket: b,
+        })),
       },
       options: {
         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
@@ -729,45 +785,62 @@ function renderCompletionAnalysis() {
         scales: {
           x: { stacked: true, ticks: { color: '#64748b', font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(148,163,184,0.10)' }, beginAtZero: true },
           y: { stacked: true, ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { display: false } }
+        },
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          const el = elements[0];
+          const ds = _tcaCharts.perEmployee.data.datasets[el.datasetIndex];
+          const row = rows[el.index];
+          if (!ds._bucket || !row) return;
+          openTcaDrill(ds._bucket, row.id);
         }
       }
     });
   }
 
-  // Overall status donut
+  // Overall status donut — click a slice → drill
   const donutEl = document.getElementById('tcaStatusDonut');
   if (donutEl) {
     _tcaCharts.statusDonut = new Chart(donutEl, {
       type: 'doughnut',
       data: {
-        labels: ['Completed','Active','Overdue','On Hold'],
+        labels: bucketOrder.map(b => TCA_BUCKETS[b].label),
         datasets: [{
-          data: [totals.completed, totals.active, totals.overdue, totals.on_hold],
-          backgroundColor: ['rgba(34,197,94,.9)','rgba(96,165,250,.9)','rgba(239,68,68,.9)','rgba(245,158,11,.9)'],
+          data: bucketOrder.map(b => totals[b]),
+          backgroundColor: bucketOrder.map(b => TCA_BUCKETS[b].color),
           borderColor: 'var(--bg-card)', borderWidth: 2, hoverOffset: 8,
         }]
       },
       options: {
         responsive: true, maintainAspectRatio: false, cutout: '62%',
-        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } }, position: 'bottom' } }
+        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } }, position: 'bottom' } },
+        onClick: (evt, elements) => {
+          if (!elements.length) return;
+          openTcaDrill(bucketOrder[elements[0].index]);
+        }
       }
     });
   }
 
-  // Leaderboard table
+  // Leaderboard table — every number cell is clickable
   const tbody = document.getElementById('tcaLeaderboardBody');
+  const numCell = (val, color, uid, bucket) => {
+    if (!val) return `<td style="text-align:center;color:var(--text-3);">—</td>`;
+    return `<td style="text-align:center;color:${color};font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:transparent;transition:.15s;" onmouseover="this.style.textDecorationColor='${color}'" onmouseout="this.style.textDecorationColor='transparent'" onclick="openTcaDrill('${bucket}','${uid}')">${val}</td>`;
+  };
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3);font-size:13px;">No assigned tasks yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-3);font-size:13px;">No assigned tasks yet.</td></tr>';
   } else {
     tbody.innerHTML = rows.map(r => {
       const rateColor = r.rate >= 75 ? 'var(--success)' : r.rate >= 50 ? 'var(--warning)' : 'var(--p-urgent)';
       return `<tr>
-        <td style="font-weight:700;">${r.name}</td>
-        <td style="text-align:center;font-weight:700;">${r.total}</td>
-        <td style="text-align:center;color:var(--success);font-weight:700;">${r.completed}</td>
-        <td style="text-align:center;color:#60a5fa;font-weight:700;">${r.active}</td>
-        <td style="text-align:center;color:var(--p-urgent);font-weight:700;">${r.overdue}</td>
-        <td style="text-align:center;color:var(--warning);font-weight:700;">${r.on_hold}</td>
+        <td style="font-weight:700;cursor:pointer;" onclick="openTcaDrill('all','${r.id}')">${r.name}</td>
+        ${numCell(r.total,          'var(--text-1)',                    r.id, 'all')}
+        ${numCell(r.on_time,        TCA_BUCKETS.on_time.solid,          r.id, 'on_time')}
+        ${numCell(r.completed_late, TCA_BUCKETS.completed_late.solid,   r.id, 'completed_late')}
+        ${numCell(r.active,         TCA_BUCKETS.active.solid,           r.id, 'active')}
+        ${numCell(r.overdue_open,   TCA_BUCKETS.overdue_open.solid,     r.id, 'overdue_open')}
+        ${numCell(r.on_hold,        TCA_BUCKETS.on_hold.solid,          r.id, 'on_hold')}
         <td style="text-align:center;">
           <div style="display:flex;align-items:center;gap:8px;justify-content:center;">
             <div style="width:60px;height:6px;background:var(--border);border-radius:999px;overflow:hidden;">
@@ -779,6 +852,81 @@ function renderCompletionAnalysis() {
       </tr>`;
     }).join('');
   }
+
+  // Stash the tagged pool so the drill-down can filter without recomputing
+  _tcaCharts._tagged = tagged;
+}
+
+// Drill-down: show the task list for a given bucket (and optionally employee).
+// `bucket` values: 'on_time' | 'completed_late' | 'active' | 'overdue_open' | 'on_hold' | 'all'
+function openTcaDrill(bucket, userId) {
+  const tagged = _tcaCharts._tagged || [];
+  let items = bucket === 'all' ? tagged : tagged.filter(t => t._bucket === bucket);
+  if (userId) items = items.filter(t => t.user_id === userId);
+
+  const user = userId ? allUsers.find(u => u.id === userId) : null;
+  const bucketLabel = bucket === 'all' ? 'All Assigned' : (TCA_BUCKETS[bucket]?.label || bucket);
+  const title = user ? `${bucketLabel} · ${user.full_name}` : bucketLabel;
+  document.getElementById('tcaDrillTitle').textContent = `📋 ${title} (${items.length})`;
+
+  const body = document.getElementById('tcaDrillBody');
+  if (!items.length) {
+    body.innerHTML = '<div class="empty-state" style="padding:30px;"><div class="empty-icon">📭</div><div class="empty-text">No tasks in this bucket</div></div>';
+  } else {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const row = (t) => {
+      const assignee = allUsers.find(u => u.id === t.user_id)?.full_name || '—';
+      const bucketPill = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:${TCA_BUCKETS[t._bucket].color};color:#000;font-size:10px;font-weight:800;letter-spacing:.04em;">${TCA_BUCKETS[t._bucket].label}</span>`;
+      let timing = '';
+      if (t._bucket === 'completed_late') {
+        const due  = new Date(t.due_date); due.setHours(0,0,0,0);
+        const done = new Date(t.done_at); done.setHours(0,0,0,0);
+        const days = Math.floor((done - due) / 86400000);
+        timing = `<span style="color:var(--warning);font-weight:700;">⏰ ${days}d late</span>`;
+      } else if (t._bucket === 'overdue_open') {
+        const due = new Date(t.due_date); due.setHours(0,0,0,0);
+        const days = Math.floor((today - due) / 86400000);
+        timing = `<span style="color:var(--p-urgent);font-weight:700;">⚠️ ${days}d overdue</span>`;
+      } else if (t._bucket === 'on_time' && t.done_at && t.due_date) {
+        const due  = new Date(t.due_date); due.setHours(0,0,0,0);
+        const done = new Date(t.done_at); done.setHours(0,0,0,0);
+        const days = Math.floor((due - done) / 86400000);
+        timing = days >= 0 ? `<span style="color:var(--success);">✓ ${days === 0 ? 'due day' : `${days}d early`}</span>` : '';
+      }
+      return `<tr>
+        <td style="padding:10px 12px;">
+          <div style="font-weight:700;font-size:13px;">${PRIORITY_ICONS[t.priority] || ''} ${t.title}</div>
+          ${t.linked_project_id ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px;">🔗 ${t.linked_project_id}</div>` : ''}
+        </td>
+        <td style="padding:10px 12px;font-size:12px;">${assignee}</td>
+        <td style="padding:10px 12px;font-size:12px;color:var(--text-3);">${t.due_date ? formatDate(t.due_date) : '—'}</td>
+        <td style="padding:10px 12px;font-size:12px;color:var(--text-3);">${t.done_at ? formatDate(t.done_at.slice(0,10)) : '—'}</td>
+        <td style="padding:10px 12px;">${timing}</td>
+        <td style="padding:10px 12px;">${bucketPill}</td>
+      </tr>`;
+    };
+    body.innerHTML = `
+      <div class="table-wrapper" style="border:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Assignee</th>
+              <th>Due</th>
+              <th>Done At</th>
+              <th>Timing</th>
+              <th>Bucket</th>
+            </tr>
+          </thead>
+          <tbody>${items.sort((a,b) => (b.done_at || b.created_at || '').localeCompare(a.done_at || a.created_at || '')).map(row).join('')}</tbody>
+        </table>
+      </div>`;
+  }
+  document.getElementById('tcaDrillModal').classList.add('open');
+}
+
+function closeTcaDrill() {
+  document.getElementById('tcaDrillModal').classList.remove('open');
 }
 
 // ── Admin per-employee assigned-task dashboard ─────────────
