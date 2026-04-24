@@ -372,7 +372,11 @@ async function loadAllSubcats() {
   });
   return out;
 }
-let allTasks = [], allUsers = [], activeUserId = session.id;
+// Admins default to the 'all' user filter so the analytics KPIs reflect
+// the whole team (what they assigned to others). Non-admins only ever
+// see their own tasks. Assigning an adminId default broke the card
+// because it filtered to "tasks assigned TO the admin" → usually zero.
+let allTasks = [], allUsers = [], activeUserId = session.role === 'admin' ? 'all' : session.id;
 let allSubcats = {};
 let selectedPriority = '';
 let loggingTaskId = null, deletingTaskId = null;
