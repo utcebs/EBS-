@@ -344,20 +344,22 @@
 const session = requireAuth();
 let selectedAssignPriority = '';
 
+// Map of category-name → array of subcategory names, sourced from
+// admin-managed `categories` / `subcategories` (Phase 4) with fallback
+// to the legacy three tables if the migration isn't applied yet.
+let CATEGORY_ICONS = {};
 async function loadAllSubcats() {
-  const [supRes, tstRes, prjRes] = await Promise.all([
-    db.from('support_subcategories').select('name').order('sort_order').order('name'),
-    db.from('testing_subcategories').select('name').order('sort_order').order('name'),
-    db.from('project_subcategories').select('name').order('sort_order').order('name'),
-  ]);
-  return {
-    Support: (supRes.data || []).map(r => r.name),
-    Testing: (tstRes.data || []).map(r => r.name),
-    Project: (prjRes.data || []).map(r => r.name),
-  };
+  const cats = await loadCategories();
+  const out = {};
+  CATEGORY_ICONS = {};
+  cats.forEach(c => {
+    out[c.name] = (c.subcategories || []).map(s => s.name);
+    CATEGORY_ICONS[c.name] = c.icon || '📁';
+  });
+  return out;
 }
 let allTasks = [], allUsers = [], activeUserId = session.id;
-let allSubcats = { Support: [], Testing: [], Project: [] };
+let allSubcats = {};
 let selectedPriority = '';
 let loggingTaskId = null, deletingTaskId = null;
 
@@ -732,14 +734,15 @@ function openLogModal(id, title) {
   document.getElementById('logTaskWeek').value        = today.week;
   document.getElementById('logModalError').classList.remove('show');
 
-  // Populate subcategory dropdown
+  // Populate subcategory dropdown from admin-managed categories.
   const sel = document.getElementById('logTaskSubCategory');
   sel.innerHTML = '<option value="">Select sub-category…</option>';
-  const icons = { Support:'🛡️', Testing:'🧪', Project:'🚀' };
-  ['Support','Testing','Project'].forEach(cat => {
+  Object.keys(allSubcats).forEach(cat => {
+    const subs = allSubcats[cat] || [];
+    if (!subs.length) return;
     const group = document.createElement('optgroup');
-    group.label = icons[cat] + ' ' + cat;
-    (allSubcats[cat] || []).forEach(name => {
+    group.label = (CATEGORY_ICONS[cat] || '📁') + ' ' + cat;
+    subs.forEach(name => {
       const opt = new Option(name, name);
       opt.dataset.cat = cat;
       group.appendChild(opt);

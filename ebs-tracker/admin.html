@@ -327,37 +327,38 @@
         <div style="display:flex;flex-direction:column;gap:6px;" id="holidayList"></div>
       </div>
 
-      <!-- Sub-category management -->
-      <div style="font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;">🏷️ Sub-Category Management</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;">
-        <div class="card">
-          <div class="card-title-lg" style="color:var(--support);">🛡️ Support</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;">
-            <input type="text" id="newSupportSubcat" class="form-control" placeholder="New sub-category…" />
-            <button class="btn btn-primary btn-sm" onclick="addSubcat('support')">➕</button>
+      <!-- Categories management — admin can add/rename/soft-delete primary categories
+           and manage subcategories under each. System categories (is_system=true)
+           cannot be renamed or hard-deleted; only soft-hidden. -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;">🏷️ Categories</div>
+        <button class="btn btn-primary btn-sm" onclick="openNewCategoryModal()">➕ New Primary Category</button>
+      </div>
+      <div id="categoriesList" style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+        <div class="loading"><div class="spinner"></div> Loading categories…</div>
+      </div>
+
+      <!-- New / Edit category modal -->
+      <div id="categoryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center;padding:20px;">
+        <div class="card" style="max-width:420px;width:100%;">
+          <div class="card-title-lg" id="categoryModalTitle" style="margin-bottom:14px;">New Primary Category</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <label class="form-label">Icon (emoji)</label>
+              <input type="text" id="categoryModalIcon" class="form-control" placeholder="🎯" maxlength="4" />
+            </div>
+            <div>
+              <label class="form-label">Name</label>
+              <input type="text" id="categoryModalName" class="form-control" placeholder="e.g. Training" />
+            </div>
+            <div>
+              <label class="form-label">Sort Order</label>
+              <input type="number" id="categoryModalSort" class="form-control" placeholder="0" />
+            </div>
           </div>
-          <div id="supportSubcatList" style="display:flex;flex-direction:column;gap:6px;min-height:40px;">
-            <div class="loading"><div class="spinner"></div></div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title-lg" style="color:var(--testing);">🧪 Testing</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;">
-            <input type="text" id="newTestingSubcat" class="form-control" placeholder="New sub-category…" />
-            <button class="btn btn-primary btn-sm" onclick="addSubcat('testing')">➕</button>
-          </div>
-          <div id="testingSubcatList" style="display:flex;flex-direction:column;gap:6px;min-height:40px;">
-            <div class="loading"><div class="spinner"></div></div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title-lg" style="color:var(--project);">🚀 Project</div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;">
-            <input type="text" id="newProjectSubcat" class="form-control" placeholder="New sub-category…" />
-            <button class="btn btn-primary btn-sm" onclick="addSubcat('project')">➕</button>
-          </div>
-          <div id="projectSubcatList" style="display:flex;flex-direction:column;gap:6px;min-height:40px;">
-            <div class="loading"><div class="spinner"></div></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            <button class="btn btn-secondary btn-sm" onclick="closeCategoryModal()">Cancel</button>
+            <button class="btn btn-primary btn-sm" id="categoryModalSaveBtn" onclick="saveCategoryModal()">💾 Save</button>
           </div>
         </div>
       </div>
@@ -723,9 +724,7 @@ async function loadSettingsTab() {
       </div>`;
     }).join('');
   }
-  loadSubcatList('support');
-  loadSubcatList('testing');
-  loadSubcatList('project');
+  renderCategoriesAdmin();
   populateLeaveUserSelect();
   loadLeaveList();
   loadEmailjsConfig();
@@ -816,36 +815,159 @@ async function saveCatLabel(cat) {
   else showToast(`"${val}" saved as ${cat} label!`,'success');
 }
 
-// ── Generic Sub-category Management ────────────────────────
-const SUBCAT_TABLES = { support:'support_subcategories', testing:'testing_subcategories', project:'project_subcategories' };
-const SUBCAT_ICONS  = { support:'🛡️', testing:'🧪', project:'🚀' };
+// ── Admin-managed Categories + Subcategories ───────────────
+// Reads from the new `categories` / `subcategories` tables (Phase 4
+// migration). Falls back to legacy 3-table layout via loadCategories()
+// if the migration hasn't been applied yet — that path renders the rows
+// read-only with a hint.
+let categoryEditId = null;
 
-async function loadSubcatList(cat) {
-  const el = document.getElementById(cat + 'SubcatList');
+async function renderCategoriesAdmin() {
+  const el = document.getElementById('categoriesList');
   if (!el) return;
-  const { data } = await db.from(SUBCAT_TABLES[cat]).select('id,name').order('sort_order').order('name');
-  if (!data || !data.length) { el.innerHTML = `<div style="font-size:12px;color:var(--text-3);">None yet.</div>`; return; }
-  el.innerHTML = data.map(s => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);">
-      <span style="font-size:13px;font-weight:600;">${SUBCAT_ICONS[cat]} ${s.name}</span>
-      <button class="btn btn-danger btn-sm" onclick="deleteSubcat('${cat}','${s.id}','${s.name.replace(/'/g,"\'")}')">🗑️</button>
-    </div>`).join('');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+
+  // Pull ALL categories (active + inactive) so admin can restore soft-deleted ones.
+  // loadCategories() only returns active rows, so go direct here.
+  let cats = [], subs = [];
+  let migrated = true;
+  try {
+    const [catRes, subRes] = await Promise.all([
+      db.from('categories').select('*').order('sort_order').order('name'),
+      db.from('subcategories').select('*').order('sort_order').order('name'),
+    ]);
+    if (catRes.error) throw catRes.error;
+    cats = catRes.data || [];
+    subs = subRes.data || [];
+  } catch (e) {
+    migrated = false;
+  }
+
+  if (!migrated) {
+    el.innerHTML = '<div style="padding:14px;background:var(--bg-surface);border:1px dashed var(--border);border-radius:var(--radius-lg);font-size:12px;color:var(--text-3);">📦 Run the <code>2026-04-24_categories-badges-doneat.sql</code> migration in Supabase to enable admin-managed categories. Until then, sub-categories can only be edited via the legacy three-table layout.</div>';
+    return;
+  }
+
+  if (!cats.length) {
+    el.innerHTML = '<div style="padding:14px;font-size:12px;color:var(--text-3);">No categories yet. Click "+ New Primary Category" above.</div>';
+    return;
+  }
+
+  el.innerHTML = cats.map(c => {
+    const mySubs = subs.filter(s => s.category_id === c.id);
+    const dim = !c.is_active ? 'opacity:.45;' : '';
+    return `
+    <div class="card" style="${dim}">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <span style="font-size:22px;">${c.icon || '📁'}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:800;font-size:15px;">${c.name}${c.is_system ? ' <span style="font-size:10px;color:var(--text-3);font-weight:600;background:var(--bg-surface);padding:2px 6px;border-radius:4px;margin-left:4px;">SYSTEM</span>' : ''}${!c.is_active ? ' <span style="font-size:10px;color:var(--warning);font-weight:600;margin-left:4px;">HIDDEN</span>' : ''}</div>
+          <div style="font-size:11px;color:var(--text-3);">${mySubs.length} sub-categor${mySubs.length === 1 ? 'y' : 'ies'} · sort ${c.sort_order || 0}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-secondary btn-sm" onclick="openEditCategoryModal('${c.id}')" ${c.is_system ? 'title="System category — name can be edited but row stays"' : ''}>✏️</button>
+          <button class="btn btn-secondary btn-sm" onclick="toggleCategoryActive('${c.id}', ${c.is_active})" title="${c.is_active ? 'Hide from pickers' : 'Restore to pickers'}">${c.is_active ? '👁️‍🗨️ Hide' : '👁️ Show'}</button>
+          ${!c.is_system ? `<button class="btn btn-danger btn-sm" onclick="deleteCategory('${c.id}', '${c.name.replace(/'/g,"\\'")}')">🗑️</button>` : ''}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input type="text" id="newSub-${c.id}" class="form-control" placeholder="New sub-category…" />
+        <button class="btn btn-primary btn-sm" onclick="addSubcatToCategory('${c.id}')">➕</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${mySubs.length
+          ? mySubs.map(s => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);${!s.is_active ? 'opacity:.5;' : ''}">
+              <span style="font-size:13px;font-weight:600;">${s.name}${!s.is_active ? ' <span style="font-size:10px;color:var(--warning);">HIDDEN</span>' : ''}</span>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-secondary btn-sm" onclick="toggleSubcatActive('${s.id}', ${s.is_active})">${s.is_active ? 'Hide' : 'Show'}</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteSubcategory('${s.id}', '${s.name.replace(/'/g,"\\'")}')">🗑️</button>
+              </div>
+            </div>`).join('')
+          : '<div style="font-size:12px;color:var(--text-3);">No sub-categories yet.</div>'}
+      </div>
+    </div>`;
+  }).join('');
 }
 
-async function addSubcat(cat) {
-  const input = document.getElementById('new' + cat.charAt(0).toUpperCase() + cat.slice(1) + 'Subcat');
-  const name  = input?.value.trim();
-  if (!name) { showToast('Enter a name', 'warning'); return; }
-  const { error } = await db.from(SUBCAT_TABLES[cat]).insert({ name });
-  if (error) showToast(error.code === '23505' ? 'Already exists' : error.message, 'error');
-  else { showToast(`"${name}" added!`, 'success'); input.value = ''; loadSubcatList(cat); }
+function openNewCategoryModal() {
+  categoryEditId = null;
+  document.getElementById('categoryModalTitle').textContent = 'New Primary Category';
+  document.getElementById('categoryModalIcon').value = '';
+  document.getElementById('categoryModalName').value = '';
+  document.getElementById('categoryModalSort').value = '';
+  document.getElementById('categoryModal').style.display = 'flex';
 }
 
-async function deleteSubcat(cat, id, name) {
-  if (!confirm(`Remove "${name}"?`)) return;
-  const { error } = await db.from(SUBCAT_TABLES[cat]).delete().eq('id', id);
+async function openEditCategoryModal(id) {
+  const { data } = await db.from('categories').select('*').eq('id', id).single();
+  if (!data) { showToast('Category not found', 'error'); return; }
+  categoryEditId = id;
+  document.getElementById('categoryModalTitle').textContent = 'Edit Category';
+  document.getElementById('categoryModalIcon').value = data.icon || '';
+  document.getElementById('categoryModalName').value = data.name || '';
+  document.getElementById('categoryModalSort').value = data.sort_order ?? 0;
+  document.getElementById('categoryModal').style.display = 'flex';
+}
+
+function closeCategoryModal() {
+  document.getElementById('categoryModal').style.display = 'none';
+  categoryEditId = null;
+}
+
+async function saveCategoryModal() {
+  const name = document.getElementById('categoryModalName').value.trim();
+  const icon = document.getElementById('categoryModalIcon').value.trim();
+  const sort = parseInt(document.getElementById('categoryModalSort').value) || 0;
+  if (!name) { showToast('Name is required', 'warning'); return; }
+  const payload = { name, icon: icon || null, sort_order: sort };
+  let res;
+  if (categoryEditId) {
+    res = await db.from('categories').update(payload).eq('id', categoryEditId);
+  } else {
+    res = await db.from('categories').insert(payload);
+  }
+  if (res.error) { showToast(res.error.code === '23505' ? 'Name already exists' : res.error.message, 'error'); return; }
+  showToast(`"${name}" saved`, 'success');
+  closeCategoryModal();
+  renderCategoriesAdmin();
+}
+
+async function toggleCategoryActive(id, currentlyActive) {
+  const { error } = await db.from('categories').update({ is_active: !currentlyActive }).eq('id', id);
   if (error) showToast('Failed: ' + error.message, 'error');
-  else { showToast(`"${name}" removed`, 'success'); loadSubcatList(cat); }
+  else { showToast(currentlyActive ? 'Hidden' : 'Restored', 'success'); renderCategoriesAdmin(); }
+}
+
+async function deleteCategory(id, name) {
+  if (!confirm(`Delete "${name}" and all its sub-categories? This cannot be undone — task logs already in this category will keep the name string.`)) return;
+  const { error } = await db.from('categories').delete().eq('id', id);
+  if (error) showToast('Failed: ' + error.message, 'error');
+  else { showToast(`"${name}" deleted`, 'success'); renderCategoriesAdmin(); }
+}
+
+async function addSubcatToCategory(categoryId) {
+  const input = document.getElementById('newSub-' + categoryId);
+  const name = input?.value.trim();
+  if (!name) { showToast('Enter a name', 'warning'); return; }
+  const { error } = await db.from('subcategories').insert({ category_id: categoryId, name });
+  if (error) showToast(error.code === '23505' ? 'Already exists in this category' : error.message, 'error');
+  else { showToast(`"${name}" added`, 'success'); input.value = ''; renderCategoriesAdmin(); }
+}
+
+async function toggleSubcatActive(id, currentlyActive) {
+  const { error } = await db.from('subcategories').update({ is_active: !currentlyActive }).eq('id', id);
+  if (error) showToast('Failed: ' + error.message, 'error');
+  else renderCategoriesAdmin();
+}
+
+async function deleteSubcategory(id, name) {
+  if (!confirm(`Delete sub-category "${name}"?`)) return;
+  const { error } = await db.from('subcategories').delete().eq('id', id);
+  if (error) showToast('Failed: ' + error.message, 'error');
+  else { showToast(`"${name}" deleted`, 'success'); renderCategoriesAdmin(); }
 }
 
 // ── Employee Leave Management ───────────────────────────────
@@ -1481,16 +1603,19 @@ async function renderComparison() {
       });
     }
 
-    // Category hours — drillable
+    // Category hours — drillable. Uses the dynamic categoryHours map so
+    // admin-added categories beyond Support/Testing/Project also appear.
     const catEl = document.getElementById('empCat-' + u.id);
     if (catEl) {
-      const cats = ['Support','Testing','Project'];
-      const vals = [stats.supportHours, stats.testingHours, stats.projectHours];
+      const cats = Object.keys(stats.categoryHours || {}).sort();
+      const vals = cats.map(c => stats.categoryHours[c]);
+      const palette = ['rgba(59,130,246,.85)','rgba(139,92,246,.85)','rgba(16,185,129,.85)','rgba(245,158,11,.85)','rgba(239,68,68,.85)','rgba(6,182,212,.85)'];
+      const bg = cats.map((_, i) => palette[i % palette.length]);
       compCharts['cat-' + u.id] = new Chart(catEl, {
         type: 'bar',
         data: {
-          labels: cats,
-          datasets: [{ label: 'Hours', data: vals, backgroundColor: ['rgba(59,130,246,.85)','rgba(139,92,246,.85)','rgba(16,185,129,.85)'], borderRadius: 4 }]
+          labels: cats.length ? cats : ['(no data)'],
+          datasets: [{ label: 'Hours', data: cats.length ? vals : [0], backgroundColor: bg, borderRadius: 4 }]
         },
         options: {
           indexAxis: 'y', responsive: true, maintainAspectRatio: false,
@@ -1935,17 +2060,10 @@ async function initExportTab() {
     });
     months.forEach(m => exportMonthSel.appendChild(new Option(m, m)));
   }
-  // Load subcats for subcat filter
-  const [s,t,p] = await Promise.all([
-    db.from('support_subcategories').select('name').order('sort_order'),
-    db.from('testing_subcategories').select('name').order('sort_order'),
-    db.from('project_subcategories').select('name').order('sort_order'),
-  ]);
-  exportSubcats = {
-    Support: (s.data||[]).map(r=>r.name),
-    Testing: (t.data||[]).map(r=>r.name),
-    Project: (p.data||[]).map(r=>r.name),
-  };
+  // Load subcats for subcat filter (admin-managed categories)
+  const cats = await loadCategories();
+  exportSubcats = {};
+  cats.forEach(c => { exportSubcats[c.name] = (c.subcategories || []).map(s => s.name); });
   updateExportCount();
 }
 

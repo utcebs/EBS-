@@ -140,30 +140,9 @@
         <div class="card-title">🏷️ Category <span class="req">*</span></div>
         <p style="font-size:13px;color:var(--text-3);margin-bottom:16px;">Select the most specific sub-category — the parent category is set automatically.</p>
 
-        <!-- Support group -->
-        <div class="subcat-group">
-          <div class="subcat-group-header">
-            <span style="color:var(--support);">🛡️ Support</span>
-          </div>
-          <div class="subcat-cards" id="supportCards"></div>
-        </div>
-
-        <!-- Testing group -->
-        <div class="subcat-group">
-          <div class="subcat-group-header">
-            <span style="color:var(--testing);">🧪 Testing</span>
-          </div>
-          <div class="subcat-cards" id="testingCards"></div>
-        </div>
-
-        <!-- Project group -->
-        <div class="subcat-group">
-          <div class="subcat-group-header">
-            <span style="color:var(--project);">🚀 Project</span>
-          </div>
-          <div class="subcat-cards" id="projectCards">
-            <div style="font-size:12px;color:var(--text-3);">Loading project sub-categories…</div>
-          </div>
+        <!-- Category groups built dynamically from active admin-managed categories -->
+        <div id="categoryGroupsHost">
+          <div style="font-size:12px;color:var(--text-3);">Loading categories…</div>
         </div>
 
         <!-- Selection display -->
@@ -336,38 +315,43 @@ function onDateChange() {
   }
 }
 
-// ── Load ALL sub-cats from DB ──────────────────────────────
+// ── Load category tree (active categories + active subcategories) ──
+let CATEGORY_ICONS = {};
 async function loadAllSubcats() {
-  const [supRes, tstRes, prjRes] = await Promise.all([
-    db.from('support_subcategories').select('name').order('sort_order').order('name'),
-    db.from('testing_subcategories').select('name').order('sort_order').order('name'),
-    db.from('project_subcategories').select('name').order('sort_order').order('name'),
-  ]);
-  return {
-    Support: (supRes.data || []).map(r => r.name),
-    Testing: (tstRes.data || []).map(r => r.name),
-    Project: (prjRes.data || []).map(r => r.name),
-  };
+  const cats = await loadCategories();
+  const out = {};
+  CATEGORY_ICONS = {};
+  cats.forEach(c => {
+    out[c.name] = (c.subcategories || []).map(s => s.name);
+    CATEGORY_ICONS[c.name] = c.icon || '📁';
+  });
+  return out;
 }
 
-// ── Build subcategory card grid ────────────────────────────
+// ── Build category groups + subcategory card grid ───────────
 function buildSubcatCards(subcats) {
-  const icons = { Support:'🛡️', Testing:'🧪', Project:'🚀' };
-  const containers = { Support:'supportCards', Testing:'testingCards', Project:'projectCards' };
-
-  ['Support','Testing','Project'].forEach(cat => {
-    const el = document.getElementById(containers[cat]);
+  const host = document.getElementById('categoryGroupsHost');
+  if (!host) return;
+  const cats = Object.keys(subcats);
+  if (!cats.length) {
+    host.innerHTML = '<div style="font-size:12px;color:var(--text-3);">No categories configured. Ask the admin to add some in Settings.</div>';
+    return;
+  }
+  host.innerHTML = cats.map(cat => {
     const names = subcats[cat] || [];
-    if (!names.length) {
-      el.innerHTML = `<div style="font-size:12px;color:var(--text-3);">No ${cat} sub-categories defined. Ask admin to add them in Settings.</div>`;
-      return;
-    }
-    el.innerHTML = names.map(name =>
-      `<div class="subcat-card" id="sc-${name.replace(/[^a-zA-Z0-9]/g,'-')}" onclick="selectSubcat('${name.replace(/'/g,"\'")}','${cat}')">
-        <span>${icons[cat]}</span>${name}
-      </div>`
-    ).join('');
-  });
+    const icon = CATEGORY_ICONS[cat] || '📁';
+    return `
+      <div class="subcat-group">
+        <div class="subcat-group-header">
+          <span>${icon} ${cat}</span>
+        </div>
+        <div class="subcat-cards">
+          ${names.length
+            ? names.map(name => `<div class="subcat-card" id="sc-${name.replace(/[^a-zA-Z0-9]/g,'-')}" onclick="selectSubcat('${name.replace(/'/g,"\\'")}','${cat.replace(/'/g,"\\'")}')"><span>${icon}</span>${name}</div>`).join('')
+            : `<div style="font-size:12px;color:var(--text-3);">No ${cat} sub-categories defined. Ask admin to add them in Settings.</div>`}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 // ── Sub-category selection ─────────────────────────────────
@@ -385,8 +369,7 @@ function selectSubcat(name, parent) {
   document.getElementById('selectedSubCategory').value = name;
 
   // Show display
-  const icons = { Support:'🛡️', Testing:'🧪', Project:'🚀' };
-  document.getElementById('subcatDisplayIcon').textContent  = icons[parent];
+  document.getElementById('subcatDisplayIcon').textContent  = CATEGORY_ICONS[parent] || '🏷️';
   document.getElementById('subcatDisplayName').textContent  = name;
   document.getElementById('subcatDisplayParent').textContent = parent;
   document.getElementById('subcatDisplay').classList.add('show');
@@ -514,17 +497,17 @@ async function loadTodayLogs() {
 let bulkRows = [];
 
 async function downloadTemplate() {
-  // Load all subcats + projects + mandatory setting in parallel
-  const [supRes, tstRes, prjRes, projRes, mandRes] = await Promise.all([
-    db.from('support_subcategories').select('name').order('sort_order'),
-    db.from('testing_subcategories').select('name').order('sort_order'),
-    db.from('project_subcategories').select('name').order('sort_order'),
+  // Load category tree + projects + mandatory setting in parallel
+  const [cats, projRes, mandRes] = await Promise.all([
+    loadCategories(),
     db.from('projects').select('proj_unique_id, project_name, project_number').order('project_number'),
     db.from('app_settings').select('value').eq('key', 'project_link_mandatory').maybeSingle(),
   ]);
-  const supSubs    = (supRes.data||[]).map(r=>r.name);
-  const tstSubs    = (tstRes.data||[]).map(r=>r.name);
-  const prjSubs    = (prjRes.data||[]).map(r=>r.name);
+  const subsByCat = {};
+  cats.forEach(c => { subsByCat[c.name] = (c.subcategories || []).map(s => s.name); });
+  const supSubs = subsByCat.Support || [];
+  const tstSubs = subsByCat.Testing || [];
+  const prjSubs = subsByCat.Project || [];
   const allProjects = (projRes.data||[]).filter(p => p.proj_unique_id);
   const mandatory  = mandRes.data?.value === 'true';
 
@@ -620,18 +603,18 @@ function handleBulkFile(event) {
         if (cell.includes('date') || cell.includes('yyyy')) { dataStart = i + 1; break; }
       }
 
-      // Load subcats + projects + mandatory setting for validation
-      const [supRes, tstRes, prjRes, projRes, mandRes] = await Promise.all([
-        db.from('support_subcategories').select('name'),
-        db.from('testing_subcategories').select('name'),
-        db.from('project_subcategories').select('name'),
+      // Load category tree + projects + mandatory setting for validation
+      const [cats, projRes, mandRes] = await Promise.all([
+        loadCategories(),
         db.from('projects').select('proj_unique_id, project_name'),
         db.from('app_settings').select('value').eq('key', 'project_link_mandatory').maybeSingle(),
       ]);
       const allSubcatMap = {};
-      (supRes.data||[]).forEach(r => allSubcatMap[r.name.toLowerCase()] = { name:r.name, cat:'Support' });
-      (tstRes.data||[]).forEach(r => allSubcatMap[r.name.toLowerCase()] = { name:r.name, cat:'Testing' });
-      (prjRes.data||[]).forEach(r => allSubcatMap[r.name.toLowerCase()] = { name:r.name, cat:'Project' });
+      cats.forEach(c => {
+        (c.subcategories || []).forEach(s => {
+          allSubcatMap[s.name.toLowerCase()] = { name: s.name, cat: c.name };
+        });
+      });
 
       const projectMap = {};
       (projRes.data||[]).forEach(p => { if (p.proj_unique_id) projectMap[p.proj_unique_id.toLowerCase()] = p; });

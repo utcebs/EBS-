@@ -267,6 +267,16 @@ function calculateStats(logs) {
   const accomplishmentCount = logs.filter(l => l.accomplishment && l.accomplishment.trim()).length;
   const accomplishmentRate = totalTasks > 0 ? Math.round((accomplishmentCount / totalTasks) * 100) : 0;
 
+  // Generic per-category breakdown so admin-added categories beyond the
+  // hardcoded three still surface in the dashboards. Keys are whatever
+  // string lives in task_logs.category.
+  const categoryHours = {};
+  logs.forEach(l => {
+    const k = l.category || '—';
+    categoryHours[k] = (categoryHours[k] || 0) + parseFloat(l.hours_spent || 0);
+  });
+  Object.keys(categoryHours).forEach(k => { categoryHours[k] = Math.round(categoryHours[k] * 10) / 10; });
+
   return {
     totalHours: Math.round(totalHours * 10) / 10, totalTasks,
     supportCount: supportLogs.length, testingCount: testingLogs.length, projectCount: projectLogs.length,
@@ -274,7 +284,49 @@ function calculateStats(logs) {
     supportHours: Math.round(supportHours * 10) / 10,
     testingHours: Math.round(testingHours * 10) / 10,
     projectHours: Math.round(projectHours * 10) / 10,
+    categoryHours,
   };
+}
+
+/* ── Admin-managed categories ────────────────────────────────
+ * Returns active primary categories with their active subcategories,
+ * sorted by sort_order. Falls back to the legacy 3-table seed if the
+ * `categories` table doesn't exist yet (migration not applied).
+ */
+async function loadCategories() {
+  try {
+    const { data: cats, error: e1 } = await db
+      .from('categories')
+      .select('id, name, icon, sort_order, is_active, is_system')
+      .eq('is_active', true)
+      .order('sort_order')
+      .order('name');
+    if (e1) throw e1;
+    const { data: subs, error: e2 } = await db
+      .from('subcategories')
+      .select('id, category_id, name, sort_order, is_active')
+      .eq('is_active', true)
+      .order('sort_order')
+      .order('name');
+    if (e2) throw e2;
+    return (cats || []).map(c => ({
+      ...c,
+      subcategories: (subs || []).filter(s => s.category_id === c.id),
+    }));
+  } catch (err) {
+    // Migration not applied yet — fall back to legacy hardcoded layout.
+    const ICONS = { Support: '🛡️', Testing: '🧪', Project: '🚀' };
+    const [s, t, p] = await Promise.all([
+      db.from('support_subcategories').select('id, name, sort_order').order('sort_order'),
+      db.from('testing_subcategories').select('id, name, sort_order').order('sort_order'),
+      db.from('project_subcategories').select('id, name, sort_order').order('sort_order'),
+    ]);
+    return [
+      { id: 'legacy-support', name: 'Support', icon: ICONS.Support, sort_order: 1, is_system: true, subcategories: s.data || [] },
+      { id: 'legacy-testing', name: 'Testing', icon: ICONS.Testing, sort_order: 2, is_system: true, subcategories: t.data || [] },
+      { id: 'legacy-project', name: 'Project', icon: ICONS.Project, sort_order: 3, is_system: true, subcategories: p.data || [] },
+    ];
+  }
 }
 
 function getEarnedBadges(stats) {
