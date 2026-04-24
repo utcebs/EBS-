@@ -119,6 +119,10 @@
       <div class="status-chip-row" id="statusChipRow" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"></div>
     </div>
 
+    <!-- Admin: assigned-task analytics card. Visible only when role=admin AND
+         the status filter is on completion-related views ('done', 'logged', 'all'). -->
+    <div id="assignedAnalyticsCard" style="display:none;margin-bottom:20px;"></div>
+
     <!-- Summary stat pills -->
     <div id="statPills" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;"></div>
 
@@ -469,6 +473,111 @@ function renderStatusChips() {
   });
 }
 
+// ── Admin assigned-task analytics ─────────────────────────
+// Visible only when role=admin AND statusFilter ∈ {done, logged, all}.
+// Computes on-time / late / avg-delay / overdue-still-open from done_at +
+// due_date. done_at is stamped by the Mark-Done button or by the Move-to-Log
+// flow when isCompleted is checked. Only assigned tasks (assigned_by NOT NULL)
+// are counted, since the analytics is about what the admin handed out.
+function renderAssignedAnalytics() {
+  const card = document.getElementById('assignedAnalyticsCard');
+  if (!card) return;
+  if (session.role !== 'admin' || !['done','logged','all'].includes(statusFilter)) {
+    card.style.display = 'none';
+    return;
+  }
+  const pool = (activeUserId === 'all' ? allTasks : allTasks.filter(t => t.user_id === activeUserId))
+    .filter(t => t.assigned_by);
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  const closed = pool.filter(t => (t.status === 'done' || t.status === 'logged'));
+  const onTime = []; const late = []; let totalDelayDays = 0;
+  closed.forEach(t => {
+    if (!t.due_date || !t.done_at) return;
+    const due  = new Date(t.due_date); due.setHours(0,0,0,0);
+    const done = new Date(t.done_at); done.setHours(0,0,0,0);
+    if (done <= due) onTime.push(t);
+    else { late.push(t); totalDelayDays += Math.floor((done - due) / 86400000); }
+  });
+  const avgDelay = late.length ? Math.round((totalDelayDays / late.length) * 10) / 10 : 0;
+  const overdueOpen = pool.filter(t => t.status !== 'done' && t.status !== 'logged' && t.due_date && new Date(t.due_date) < today);
+
+  // Per-assignee breakdown
+  const byUser = {};
+  pool.forEach(t => {
+    const uid = t.user_id;
+    if (!byUser[uid]) byUser[uid] = { name: (allUsers.find(u => u.id === uid)?.full_name) || '—', total: 0, onTime: 0, late: 0, overdueOpen: 0 };
+    byUser[uid].total++;
+    if (t.status === 'done' || t.status === 'logged') {
+      if (t.due_date && t.done_at) {
+        const due  = new Date(t.due_date); due.setHours(0,0,0,0);
+        const done = new Date(t.done_at); done.setHours(0,0,0,0);
+        if (done <= due) byUser[uid].onTime++; else byUser[uid].late++;
+      }
+    } else if (t.due_date && new Date(t.due_date) < today) {
+      byUser[uid].overdueOpen++;
+    }
+  });
+  const breakdown = Object.values(byUser).sort((a,b) => b.total - a.total);
+
+  card.style.display = 'block';
+  card.innerHTML = `
+    <div class="card" style="padding:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;">📊 Assigned Tasks Analytics</div>
+          <div style="font-size:12px;color:var(--text-3);margin-top:2px;">${pool.length} assigned · ${closed.length} closed${overdueOpen.length ? ` · ${overdueOpen.length} overdue still open` : ''}</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('assignedBreakdown').style.display = document.getElementById('assignedBreakdown').style.display==='none' ? 'block' : 'none';">👥 Per-Assignee Breakdown</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
+        <div style="padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);">
+          <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Total Assigned</div>
+          <div style="font-size:24px;font-weight:800;margin-top:4px;">${pool.length}</div>
+        </div>
+        <div style="padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid var(--success);border-radius:var(--radius-lg);">
+          <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;">On Time</div>
+          <div style="font-size:24px;font-weight:800;color:var(--success);margin-top:4px;">${onTime.length}</div>
+        </div>
+        <div style="padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid var(--warning);border-radius:var(--radius-lg);">
+          <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Late</div>
+          <div style="font-size:24px;font-weight:800;color:var(--warning);margin-top:4px;">${late.length}<span style="font-size:11px;color:var(--text-3);font-weight:600;margin-left:6px;">avg ${avgDelay}d</span></div>
+        </div>
+        <div style="padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid var(--p-urgent);border-radius:var(--radius-lg);">
+          <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Overdue · Open</div>
+          <div style="font-size:24px;font-weight:800;color:var(--p-urgent);margin-top:4px;">${overdueOpen.length}</div>
+        </div>
+      </div>
+      <div id="assignedBreakdown" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+        ${breakdown.length
+          ? `<div style="display:grid;grid-template-columns:1.5fr repeat(4, 1fr);gap:8px;font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:0 8px 6px;border-bottom:1px solid var(--border);">
+              <div>Assignee</div><div style="text-align:center;">Total</div><div style="text-align:center;color:var(--success);">On Time</div><div style="text-align:center;color:var(--warning);">Late</div><div style="text-align:center;color:var(--p-urgent);">Overdue Open</div>
+            </div>
+            ${breakdown.map(r => `
+              <div style="display:grid;grid-template-columns:1.5fr repeat(4, 1fr);gap:8px;font-size:13px;padding:8px;border-bottom:1px solid var(--border);">
+                <div style="font-weight:600;">${r.name}</div>
+                <div style="text-align:center;">${r.total}</div>
+                <div style="text-align:center;color:var(--success);font-weight:700;">${r.onTime}</div>
+                <div style="text-align:center;color:var(--warning);font-weight:700;">${r.late}</div>
+                <div style="text-align:center;color:var(--p-urgent);font-weight:700;">${r.overdueOpen}</div>
+              </div>`).join('')}`
+          : '<div style="font-size:12px;color:var(--text-3);">No assignees with closed tasks yet.</div>'}
+      </div>
+    </div>`;
+}
+
+async function markTaskDone(id) {
+  if (!confirm('Mark this task as done?')) return;
+  const { error } = await db.from('priority_tasks').update({
+    status: 'done',
+    done_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (error) { showToast('Failed: ' + error.message, 'error'); return; }
+  showToast('Task marked done ✅', 'success');
+  await loadTasks();
+  renderBoard();
+}
+
 // ── Admin user filter ──────────────────────────────────────
 function buildAdminFilter() {
   const tabs = document.getElementById('userFilterTabs');
@@ -532,6 +641,7 @@ function dueDateLabel(due) {
 
 function renderBoard() {
   renderStatusChips();
+  renderAssignedAnalytics();
   const tasks = getVisibleTasks();
   // Split: my tasks vs assigned to me
   const myTasks       = tasks.filter(t => !t.assigned_by || t.user_id === session.id && !t.assigned_by);
@@ -637,6 +747,7 @@ function renderTaskCard(t) {
     </div>
     <div class="task-actions">
       ${onHold ? '' : `<button class="btn btn-success btn-sm" title="Move to Work Log" onclick="openLogModal('${t.id}','${titleEscaped}')"  style="white-space:nowrap;">📝 Log</button>`}
+      ${onHold || t.status === 'done' || t.status === 'logged' ? '' : `<button class="btn btn-secondary btn-sm" title="Mark done (no work log entry)" onclick="markTaskDone('${t.id}')" style="white-space:nowrap;">✓ Done</button>`}
       ${holdBtn}
       <button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="openDeleteTaskModal('${t.id}','${titleEscaped}')">🗑️</button>
     </div>
@@ -854,7 +965,16 @@ async function submitTaskLog() {
 
   if (logErr) { err.textContent = logErr.message; err.classList.add('show'); btn.disabled=false; btn.innerHTML='💾 Save to Work Log'; return; }
 
-  // Note: task stays 'pending' so it can be logged against multiple times (multi-day tasks)
+  // If the user marked the task as completed in this log, flip the priority
+  // task to 'logged' and stamp done_at for the assigned-task analytics.
+  // Otherwise the task stays 'pending' so it can be logged against multiple
+  // times (multi-day tasks).
+  if (document.getElementById('logTaskCompleted').checked && loggingTaskId) {
+    await db.from('priority_tasks').update({
+      status: 'logged',
+      done_at: new Date().toISOString(),
+    }).eq('id', loggingTaskId);
+  }
 
   showToast('Logged to work log! ✅', 'success');
   closeLogModal();
