@@ -109,6 +109,55 @@
       </div>
     </div>
 
+    <!-- Admin: view switcher (Tasks board ↔ Completion Analysis dashboard) -->
+    <div id="taskViewSwitcher" style="display:none;margin-bottom:20px;">
+      <div style="display:inline-flex;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:4px;gap:4px;">
+        <button class="task-view-btn active" data-view="tasks" onclick="switchTaskView('tasks')">📋 Tasks Board</button>
+        <button class="task-view-btn" data-view="analysis" onclick="switchTaskView('analysis')">📊 Task Completion Analysis</button>
+      </div>
+    </div>
+    <style>
+      .task-view-btn { padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--text-2);cursor:pointer;transition:.2s;font-family:inherit; }
+      .task-view-btn:hover { color:var(--text-1); }
+      .task-view-btn.active { background:linear-gradient(135deg,var(--accent-dark),var(--accent));color:#080600; }
+      body.light-mode .task-view-btn.active { background:linear-gradient(135deg,#5C4128,#7A5A38);color:#FAF9F6; }
+    </style>
+
+    <!-- ─── VIEW: Task Completion Analysis (admin only) ─── -->
+    <div id="view-analysis" style="display:none;">
+      <!-- KPI strip -->
+      <div id="tcaKPIs" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;"></div>
+      <!-- Charts row -->
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:18px;margin-bottom:20px;">
+        <div class="card">
+          <div class="card-title-lg">👥 Tasks per Employee</div>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Stacked by status. Hover for exact counts.</div>
+          <div style="position:relative;height:340px;"><canvas id="tcaPerEmployeeChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title-lg">🍩 Overall Status</div>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Across every assigned task.</div>
+          <div style="position:relative;height:340px;"><canvas id="tcaStatusDonut"></canvas></div>
+        </div>
+      </div>
+      <!-- Per-employee leaderboard -->
+      <div class="card">
+        <div class="card-title-lg">🏆 Completion Leaderboard</div>
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Sorted by completion rate (completed ÷ total assigned).</div>
+        <div class="table-wrapper" style="border:none;">
+          <table>
+            <thead>
+              <tr><th>Employee</th><th style="text-align:center;">Assigned</th><th style="text-align:center;color:var(--success);">Completed</th><th style="text-align:center;color:#60a5fa;">Active</th><th style="text-align:center;color:var(--p-urgent);">Overdue</th><th style="text-align:center;color:var(--warning);">On Hold</th><th style="text-align:center;">Completion</th></tr>
+            </thead>
+            <tbody id="tcaLeaderboardBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── VIEW: Tasks Board (default) ─── -->
+    <div id="view-tasks">
+
     <!-- Admin: user filter tabs -->
     <div id="adminFilterSection" style="display:none;">
       <div style="font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Viewing tasks for:</div>
@@ -133,6 +182,8 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;" id="taskBoard">
       <div style="loading"><div class="spinner"></div></div>
     </div>
+
+    </div><!-- /view-tasks -->
   </main>
 </div>
 
@@ -351,6 +402,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script src="js/utils.js"></script>
@@ -400,6 +452,7 @@ async function init() {
     await loadUsers();
     buildAdminFilter();
     document.getElementById('adminFilterSection').style.display = 'block';
+    document.getElementById('taskViewSwitcher').style.display = 'block';
     document.getElementById('pageSubtitle').textContent = 'View and manage all team priority tasks';
     const assignBtn = document.getElementById('assignTaskBtn');
     if (assignBtn) {
@@ -588,6 +641,146 @@ function renderAssignedAnalytics() {
     </div>`;
 }
 
+// ── Admin view switcher (Tasks Board ↔ Task Completion Analysis) ──
+let _tcaCharts = {};
+function switchTaskView(view) {
+  document.querySelectorAll('.task-view-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === view);
+  });
+  document.getElementById('view-tasks').style.display    = view === 'tasks'    ? 'block' : 'none';
+  document.getElementById('view-analysis').style.display = view === 'analysis' ? 'block' : 'none';
+  if (view === 'analysis') renderCompletionAnalysis();
+}
+
+// ── Task Completion Analysis (admin dashboard) ─────────────
+// Aggregates every assigned task (assigned_by NOT NULL) by status and
+// by assignee. Renders KPI strip + stacked bar chart per-employee +
+// status donut + leaderboard table sorted by completion rate.
+function renderCompletionAnalysis() {
+  if (session.role !== 'admin') return;
+  Object.values(_tcaCharts).forEach(c => { try { c.destroy(); } catch(e){} });
+  _tcaCharts = {};
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const pool = allTasks.filter(t => t.assigned_by);
+
+  // Bucket each task by status
+  const bucket = (t) => {
+    if (t.status === 'done' || t.status === 'logged') return 'completed';
+    if (t.status === 'on_hold') return 'on_hold';
+    if (t.due_date && new Date(t.due_date) < today)   return 'overdue';
+    return 'active';
+  };
+  const totals = { completed: 0, active: 0, overdue: 0, on_hold: 0 };
+  pool.forEach(t => { totals[bucket(t)]++; });
+  const assigned = pool.length;
+  const completionRate = assigned ? Math.round((totals.completed / assigned) * 100) : 0;
+
+  // KPI strip
+  const kpi = (label, val, color) => `
+    <div style="padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid ${color};border-radius:var(--radius-lg);">
+      <div style="font-size:11px;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;">${label}</div>
+      <div style="font-size:24px;font-weight:800;color:${color};margin-top:4px;">${val}</div>
+    </div>`;
+  document.getElementById('tcaKPIs').innerHTML = [
+    kpi('Total Assigned',  assigned,          'var(--text-1)'),
+    kpi('Completed',       totals.completed,  'var(--success)'),
+    kpi('Active',          totals.active,     '#60a5fa'),
+    kpi('Overdue',         totals.overdue,    'var(--p-urgent)'),
+    kpi('On Hold',         totals.on_hold,    'var(--warning)'),
+    kpi('Completion Rate', completionRate + '%', completionRate >= 75 ? 'var(--success)' : completionRate >= 50 ? 'var(--warning)' : 'var(--p-urgent)'),
+  ].join('');
+
+  // Per-employee aggregation (only employees with ≥1 assigned task)
+  const byUser = {};
+  pool.forEach(t => {
+    const uid = t.user_id;
+    if (!byUser[uid]) {
+      const u = allUsers.find(x => x.id === uid);
+      byUser[uid] = { id: uid, name: u?.full_name || '—', completed:0, active:0, overdue:0, on_hold:0, total:0 };
+    }
+    byUser[uid][bucket(t)]++;
+    byUser[uid].total++;
+  });
+  const rows = Object.values(byUser)
+    .map(r => ({ ...r, rate: r.total ? Math.round((r.completed / r.total) * 100) : 0 }))
+    .sort((a,b) => b.rate - a.rate || b.total - a.total);
+
+  // Tasks per Employee — horizontal stacked bar
+  const perEl = document.getElementById('tcaPerEmployeeChart');
+  if (perEl) {
+    _tcaCharts.perEmployee = new Chart(perEl, {
+      type: 'bar',
+      data: {
+        labels: rows.map(r => r.name),
+        datasets: [
+          { label: 'Completed', data: rows.map(r => r.completed), backgroundColor: 'rgba(34,197,94,.85)' },
+          { label: 'Active',    data: rows.map(r => r.active),    backgroundColor: 'rgba(96,165,250,.85)' },
+          { label: 'Overdue',   data: rows.map(r => r.overdue),   backgroundColor: 'rgba(239,68,68,.85)' },
+          { label: 'On Hold',   data: rows.map(r => r.on_hold),   backgroundColor: 'rgba(245,158,11,.85)' },
+        ],
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#94a3b8', font: { size: 11 } }, position: 'bottom' },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw}` } }
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: '#64748b', font: { size: 10 }, precision: 0 }, grid: { color: 'rgba(148,163,184,0.10)' }, beginAtZero: true },
+          y: { stacked: true, ticks: { color: '#94a3b8', font: { size: 11 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  // Overall status donut
+  const donutEl = document.getElementById('tcaStatusDonut');
+  if (donutEl) {
+    _tcaCharts.statusDonut = new Chart(donutEl, {
+      type: 'doughnut',
+      data: {
+        labels: ['Completed','Active','Overdue','On Hold'],
+        datasets: [{
+          data: [totals.completed, totals.active, totals.overdue, totals.on_hold],
+          backgroundColor: ['rgba(34,197,94,.9)','rgba(96,165,250,.9)','rgba(239,68,68,.9)','rgba(245,158,11,.9)'],
+          borderColor: 'var(--bg-card)', borderWidth: 2, hoverOffset: 8,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '62%',
+        plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } }, position: 'bottom' } }
+      }
+    });
+  }
+
+  // Leaderboard table
+  const tbody = document.getElementById('tcaLeaderboardBody');
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-3);font-size:13px;">No assigned tasks yet.</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(r => {
+      const rateColor = r.rate >= 75 ? 'var(--success)' : r.rate >= 50 ? 'var(--warning)' : 'var(--p-urgent)';
+      return `<tr>
+        <td style="font-weight:700;">${r.name}</td>
+        <td style="text-align:center;font-weight:700;">${r.total}</td>
+        <td style="text-align:center;color:var(--success);font-weight:700;">${r.completed}</td>
+        <td style="text-align:center;color:#60a5fa;font-weight:700;">${r.active}</td>
+        <td style="text-align:center;color:var(--p-urgent);font-weight:700;">${r.overdue}</td>
+        <td style="text-align:center;color:var(--warning);font-weight:700;">${r.on_hold}</td>
+        <td style="text-align:center;">
+          <div style="display:flex;align-items:center;gap:8px;justify-content:center;">
+            <div style="width:60px;height:6px;background:var(--border);border-radius:999px;overflow:hidden;">
+              <div style="height:100%;width:${r.rate}%;background:${rateColor};border-radius:999px;"></div>
+            </div>
+            <strong style="color:${rateColor};font-size:13px;min-width:36px;text-align:right;">${r.rate}%</strong>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+}
+
 // ── Admin per-employee assigned-task dashboard ─────────────
 // One collapsible card per employee with at least one assigned task.
 // Open by default for the user currently filtered in the user-tab strip
@@ -754,6 +947,9 @@ function renderBoard() {
   renderStatusChips();
   renderAssignedAnalytics();
   renderAssignedByEmployee();
+  // Keep the Completion Analysis tab in sync when tasks change while it's visible
+  const analysisView = document.getElementById('view-analysis');
+  if (analysisView && analysisView.style.display !== 'none') renderCompletionAnalysis();
   const tasks = getVisibleTasks();
   // Split: my tasks vs assigned to me
   const myTasks       = tasks.filter(t => !t.assigned_by || t.user_id === session.id && !t.assigned_by);
