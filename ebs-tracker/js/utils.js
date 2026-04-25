@@ -650,6 +650,9 @@ function applyTheme(theme) {
 function toggleTheme() {
   const current = localStorage.getItem(THEME_KEY) || 'dark';
   applyTheme(current === 'dark' ? 'light' : 'dark');
+  // Tell any visible chart-heavy view to repaint with theme-aware colors.
+  // Pages that don't define these handlers just ignore the event.
+  document.dispatchEvent(new Event('ebs:theme-changed'));
 }
 
 function injectThemeToggle() {

@@ -2009,6 +2009,23 @@ async function deleteBadge(id, name) {
 let compCharts = {};
 let activePeriod = 'all';
 
+// Line+fill colors for the per-employee radar and trend charts. White
+// works in dark mode; in light mode it disappears against the cream
+// surface — flip to the brand text color so the line stays legible.
+function compChartLine() {
+  const isLight = document.body.classList.contains('light-mode');
+  return isLight
+    ? { stroke: '#1a1612', fill: 'rgba(26,22,18,0.10)' }
+    : { stroke: '#ffffff', fill: 'rgba(255,255,255,0.10)' };
+}
+
+// Re-render the comparison view when theme toggles so chart colors
+// update without a manual refresh. Only triggers if the tab is visible.
+document.addEventListener('ebs:theme-changed', () => {
+  const tab = document.getElementById('tab-comparison');
+  if (tab && tab.style.display !== 'none') renderComparison();
+});
+
 function setPeriod(val) {
   activePeriod = val;
   document.querySelectorAll('.comp-period-btn').forEach(b => b.classList.toggle('active', b.dataset.val === val));
@@ -2154,9 +2171,10 @@ async function renderComparison() {
       const units    = ['h','','d','','d','h'];
       const axisMax  = [Math.max(stats.totalHours, wt.expectedHours || 100), Math.max(stats.totalTasks, 50), Math.max(stats.maxStreak, 14), Math.max(stats.accomplishmentCount, 30), Math.max(stats.uniqueDays, wt.workingDays || 30), Math.max(stats.maxDayHours, 8)];
       const norm     = realVals.map((v, i) => Math.round(v / axisMax[i] * 100));
+      const themeLine = compChartLine();
       compCharts['radar-' + u.id] = new Chart(radarEl, {
         type: 'radar',
-        data: { labels, datasets: [{ label: u.full_name.split(' ')[0], data: norm, borderColor: '#fff', backgroundColor: 'rgba(255,255,255,0.10)', pointBackgroundColor: '#fff', borderWidth: 2, pointRadius: 3 }] },
+        data: { labels, datasets: [{ label: u.full_name.split(' ')[0], data: norm, borderColor: themeLine.stroke, backgroundColor: themeLine.fill, pointBackgroundColor: themeLine.stroke, borderWidth: 2, pointRadius: 3 }] },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: {
@@ -2229,6 +2247,7 @@ function drawTrend(uid, logs, mode) {
   else if (mode === 'daily')   buckets = aggregateByDay(logs, 14);
   else                          buckets = aggregateByWeek(logs, 8);
 
+  const themeLine = compChartLine();
   compCharts[key] = new Chart(el, {
     type: 'line',
     data: {
@@ -2236,10 +2255,10 @@ function drawTrend(uid, logs, mode) {
       datasets: [{
         label: 'Hours',
         data: buckets.map(b => Math.round(b.hours * 10) / 10),
-        borderColor: '#fff',
-        backgroundColor: 'rgba(255,255,255,0.10)',
+        borderColor: themeLine.stroke,
+        backgroundColor: themeLine.fill,
         tension: 0.4, fill: true,
-        pointBackgroundColor: '#fff', pointRadius: 3, borderWidth: 2
+        pointBackgroundColor: themeLine.stroke, pointRadius: 3, borderWidth: 2
       }]
     },
     options: {
