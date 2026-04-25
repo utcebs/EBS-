@@ -43,9 +43,6 @@
         <span class="filter-label">Category:</span>
         <select class="form-control" id="filterCategory" style="max-width:140px;" onchange="onCatFilterChange()">
           <option value="">All Categories</option>
-          <option value="Support">Support</option>
-          <option value="Testing">Testing</option>
-          <option value="Project">Project</option>
         </select>
         <select class="form-control" id="filterSubCategory" style="max-width:180px;">
           <option value="">All Sub-Categories</option>
@@ -116,11 +113,7 @@
     <div class="form-grid">
       <div class="form-group">
         <label class="form-label">Category<span class="req">*</span></label>
-        <select id="editCategory" class="form-control">
-          <option value="Support">Support</option>
-          <option value="Testing">Testing</option>
-          <option value="Project">Project</option>
-        </select>
+        <select id="editCategory" class="form-control"></select>
       </div>
       <div class="form-group">
         <label class="form-label">Sub-Category</label>
@@ -184,17 +177,26 @@
   let allLogs = [], allUsers = [], allSubcats = {}, activeUserId = 'all', editingId = null, deletingId = null;
 
   // ── Init ──────────────────────────────────────────────────
+  // Loads admin-managed categories + their sub-categories, populates both
+  // the filter dropdown (top of page) and the edit-modal category dropdown
+  // so they reflect whatever the admin has configured (incl. soft-hidden).
   async function loadAllSubcats() {
-    const [s,t,p] = await Promise.all([
-      db.from('support_subcategories').select('name').order('sort_order'),
-      db.from('testing_subcategories').select('name').order('sort_order'),
-      db.from('project_subcategories').select('name').order('sort_order'),
-    ]);
-    allSubcats = {
-      Support: (s.data||[]).map(r=>r.name),
-      Testing: (t.data||[]).map(r=>r.name),
-      Project: (p.data||[]).map(r=>r.name),
-    };
+    const cats = await loadCategories();
+    allSubcats = {};
+    cats.forEach(c => { allSubcats[c.name] = (c.subcategories || []).map(s => s.name); });
+
+    // Populate the filter category dropdown
+    const filterSel = document.getElementById('filterCategory');
+    if (filterSel) {
+      filterSel.innerHTML = '<option value="">All Categories</option>';
+      cats.forEach(c => filterSel.appendChild(new Option(c.name, c.name)));
+    }
+    // Populate the edit-modal category dropdown
+    const editSel = document.getElementById('editCategory');
+    if (editSel) {
+      editSel.innerHTML = '';
+      cats.forEach(c => editSel.appendChild(new Option(c.name, c.name)));
+    }
   }
 
   function onCatFilterChange() {
@@ -207,8 +209,8 @@
         sel.appendChild(o);
       });
     } else {
-      // Show all subcats
-      ['Support','Testing','Project'].forEach(c => {
+      // Show every subcat across all admin-managed categories
+      Object.keys(allSubcats).forEach(c => {
         (allSubcats[c]||[]).forEach(name => {
           const o = new Option(name + ' (' + c + ')', name);
           sel.appendChild(o);

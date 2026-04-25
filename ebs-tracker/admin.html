@@ -131,9 +131,6 @@
         <span class="filter-label">Category:</span>
         <select class="form-control" id="recFilterCat" style="max-width:150px;" onchange="onRecCatChange()">
           <option value="">All Categories</option>
-          <option value="Support">Support</option>
-          <option value="Testing">Testing</option>
-          <option value="Project">Project</option>
         </select>
         <select class="form-control" id="recFilterSubcat" style="max-width:180px;">
           <option value="">All Sub-Categories</option>
@@ -313,23 +310,6 @@
             <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);"><span style="color:var(--text-3);">Weekends</span><strong>Fri &amp; Sat (fixed)</strong></div>
             <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);"><span style="color:var(--text-3);">Ramadan</span><strong style="color:#d8b4fe;">Feb 18–Mar 20, 6h (fixed)</strong></div>
             <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);"><span style="color:var(--text-3);">Normal Hours</span><strong>8h/day (fixed)</strong></div>
-          </div>
-          <div style="margin-top:8px;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);">
-            <div style="font-size:11px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Category Labels</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-size:10px;color:var(--text-3);">Support label</label>
-                <div style="display:flex;gap:4px;"><input type="text" id="catLabelSupport" class="form-control" style="font-size:12px;padding:4px 8px;" /><button class="btn btn-primary btn-sm" onclick="saveCatLabel('support')">✓</button></div>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-size:10px;color:var(--text-3);">Testing label</label>
-                <div style="display:flex;gap:4px;"><input type="text" id="catLabelTesting" class="form-control" style="font-size:12px;padding:4px 8px;" /><button class="btn btn-primary btn-sm" onclick="saveCatLabel('testing')">✓</button></div>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:4px;">
-                <label style="font-size:10px;color:var(--text-3);">Project label</label>
-                <div style="display:flex;gap:4px;"><input type="text" id="catLabelProject" class="form-control" style="font-size:12px;padding:4px 8px;" /><button class="btn btn-primary btn-sm" onclick="saveCatLabel('project')">✓</button></div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -572,9 +552,6 @@
             <label class="form-label">Category</label>
             <select class="form-control" id="exportCatSel" onchange="onExportCatChange()">
               <option value="">All Categories</option>
-              <option value="Support">Support</option>
-              <option value="Testing">Testing</option>
-              <option value="Project">Project</option>
             </select>
           </div>
           <div class="form-group mb-0">
@@ -828,14 +805,6 @@ async function loadSettingsTab() {
   const startRes = await db.from('app_settings').select('value').eq('key','tracker_start_date').maybeSingle();
   if (startRes.data) document.getElementById('trackerStartInput').value = startRes.data.value;
 
-  // Load category labels
-  const catRes = await db.from('app_settings').select('key,value').in('key',['category_name_support','category_name_testing','category_name_project']);
-  (catRes.data||[]).forEach(r => {
-    const map = { category_name_support:'catLabelSupport', category_name_testing:'catLabelTesting', category_name_project:'catLabelProject' };
-    const el = document.getElementById(map[r.key]);
-    if (el) el.value = r.value;
-  });
-
   // Load project_link_mandatory setting
   const mandRes = await db.from('app_settings').select('value').eq('key','project_link_mandatory').maybeSingle();
   const mandEl  = document.getElementById('projectLinkMandatoryToggle');
@@ -897,16 +866,6 @@ async function saveTrackerStart() {
   const { error } = await db.from('app_settings').upsert({ key:'tracker_start_date', value:val, label:'Tracker Start Date', updated_by: session.id }, { onConflict:'key' });
   if (error) showToast('Failed: '+error.message,'error');
   else showToast('Tracker start date saved! Reload pages to see updated counts.','success');
-}
-
-async function saveCatLabel(cat) {
-  const fieldMap = { support:'catLabelSupport', testing:'catLabelTesting', project:'catLabelProject' };
-  const keyMap   = { support:'category_name_support', testing:'category_name_testing', project:'category_name_project' };
-  const val = document.getElementById(fieldMap[cat])?.value.trim();
-  if (!val) { showToast('Label cannot be empty','warning'); return; }
-  const { error } = await db.from('app_settings').upsert({ key:keyMap[cat], value:val, label:cat+' Category Label', updated_by:session.id }, { onConflict:'key' });
-  if (error) showToast('Failed: '+error.message,'error');
-  else showToast(`"${val}" saved as ${cat} label!`,'success');
 }
 
 // ── Admin-managed Categories + Subcategories ───────────────
@@ -1027,19 +986,31 @@ async function saveCategoryModal() {
   showToast(`"${name}" saved`, 'success');
   closeCategoryModal();
   renderCategoriesAdmin();
+  populateFilters();          // refresh Records + Export category dropdowns
+  setupExportSelects();       // refresh exportSubcats cache for the Sub-Cat filter
 }
 
 async function toggleCategoryActive(id, currentlyActive) {
   const { error } = await db.from('categories').update({ is_active: !currentlyActive }).eq('id', id);
   if (error) showToast('Failed: ' + error.message, 'error');
-  else { showToast(currentlyActive ? 'Hidden' : 'Restored', 'success'); renderCategoriesAdmin(); }
+  else {
+    showToast(currentlyActive ? 'Hidden' : 'Restored', 'success');
+    renderCategoriesAdmin();
+    populateFilters();
+    setupExportSelects();
+  }
 }
 
 async function deleteCategory(id, name) {
   if (!confirm(`Delete "${name}" and all its sub-categories? This cannot be undone — task logs already in this category will keep the name string.`)) return;
   const { error } = await db.from('categories').delete().eq('id', id);
   if (error) showToast('Failed: ' + error.message, 'error');
-  else { showToast(`"${name}" deleted`, 'success'); renderCategoriesAdmin(); }
+  else {
+    showToast(`"${name}" deleted`, 'success');
+    renderCategoriesAdmin();
+    populateFilters();
+    setupExportSelects();
+  }
 }
 
 async function addSubcatToCategory(categoryId) {
@@ -1048,20 +1019,20 @@ async function addSubcatToCategory(categoryId) {
   if (!name) { showToast('Enter a name', 'warning'); return; }
   const { error } = await db.from('subcategories').insert({ category_id: categoryId, name });
   if (error) showToast(error.code === '23505' ? 'Already exists in this category' : error.message, 'error');
-  else { showToast(`"${name}" added`, 'success'); input.value = ''; renderCategoriesAdmin(); }
+  else { showToast(`"${name}" added`, 'success'); input.value = ''; renderCategoriesAdmin(); setupExportSelects(); }
 }
 
 async function toggleSubcatActive(id, currentlyActive) {
   const { error } = await db.from('subcategories').update({ is_active: !currentlyActive }).eq('id', id);
   if (error) showToast('Failed: ' + error.message, 'error');
-  else renderCategoriesAdmin();
+  else { renderCategoriesAdmin(); setupExportSelects(); }
 }
 
 async function deleteSubcategory(id, name) {
   if (!confirm(`Delete sub-category "${name}"?`)) return;
   const { error } = await db.from('subcategories').delete().eq('id', id);
   if (error) showToast('Failed: ' + error.message, 'error');
-  else { showToast(`"${name}" deleted`, 'success'); renderCategoriesAdmin(); }
+  else { showToast(`"${name}" deleted`, 'success'); renderCategoriesAdmin(); setupExportSelects(); }
 }
 
 // ── Employee Leave Management ───────────────────────────────
@@ -1466,7 +1437,7 @@ async function saveResetPassword() {
 }
 
 // ── Records Tab ────────────────────────────────────────────
-function populateFilters() {
+async function populateFilters() {
   const userSelectors = ['recFilterUser', 'exportUserSel'];
   userSelectors.forEach(id => {
     const sel = document.getElementById(id);
@@ -1481,6 +1452,15 @@ function populateFilters() {
     const defaultOpt = id === 'exportMonthSel' ? 'All Months' : (id === 'compMonth' ? 'All Months' : 'All Months');
     sel.innerHTML = `<option value="">${defaultOpt}</option>`;
     months.forEach(m => { const o = new Option(m, m); sel.appendChild(o); });
+  });
+  // Populate the Records and Export category dropdowns from the live
+  // admin-managed category list. Stays in sync as admin adds/hides them.
+  const cats = await loadCategories();
+  ['recFilterCat','exportCatSel'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">All Categories</option>';
+    cats.forEach(c => sel.appendChild(new Option(c.name, c.name)));
   });
   ['recFilterUser','recFilterCat','recFilterMonth','recSearch','recFilterSubcat'].forEach(id => {
     const el = document.getElementById(id);
