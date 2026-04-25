@@ -1357,7 +1357,7 @@ async function viewUser(uid) {
         <td class="td-sm">${formatDate(l.log_date)}</td>
         <td>${truncate(l.task_project,40)}</td>
         <td>${categoryBadge(l.category)}<span style='font-size:11px;color:var(--text-3);display:block;margin-top:2px;'>${l.sub_category||''}</span></td>
-        <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
+        <td><strong>${safeNum(l.hours_spent, 1)}h</strong></td>
         <td class="td-sm">${l.accomplishment_status === 'pending' ? '<span style="color:var(--warning);font-weight:700;">🕒 Pending</span> ' : ''}${truncate(l.accomplishment,40)}</td>
         <td class="td-muted td-sm">${truncate(l.comments_notes,35)}</td>
         <td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm btn-icon" onclick="openAdminEdit('${l.id}')">✏️</button></td>
@@ -1380,9 +1380,14 @@ function exportUserCSV() {
 let emailjsConfig = { serviceId:'', templateId:'', publicKey:'' };
 
 async function loadEmailjsConfig() {
-  const { data } = await db.from('app_settings')
+  const { data, error } = await db.from('app_settings')
     .select('key,value')
     .in('key',['emailjs_service_id','emailjs_template_id','emailjs_public_key']);
+  if (error) {
+    console.error('loadEmailjsConfig error:', error);
+    showToast('Could not load EmailJS config: ' + error.message, 'warning');
+    return;
+  }
   (data||[]).forEach(r => {
     const map = { emailjs_service_id:'emailjsServiceId', emailjs_template_id:'emailjsTemplateId', emailjs_public_key:'emailjsPublicKey' };
     const el = document.getElementById(map[r.key]);
@@ -1608,7 +1613,7 @@ function renderRecordsTable() {
     <td><strong>${l.team_member || l.profiles?.full_name || '—'}</strong></td>
     <td>${truncate(l.task_project, 35)}</td>
     <td>${categoryBadge(l.category)}<span style='font-size:11px;color:var(--text-3);display:block;margin-top:2px;'>${l.sub_category||''}</span></td>
-    <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
+    <td><strong>${safeNum(l.hours_spent, 1)}h</strong></td>
     <td class="td-sm">${pendingBadge}${truncate(l.accomplishment, 35)}</td>
     <td class="td-muted td-sm">${truncate(l.comments_notes, 30)}</td>
     <td onclick="event.stopPropagation()"><button class="btn btn-secondary btn-sm btn-icon" onclick="openAdminEdit('${l.id}')">✏️</button></td>
@@ -1633,7 +1638,7 @@ function openLogView(id) {
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <span style="font-size:12px;color:var(--text-3);font-weight:600;">👤 ${l.team_member || l.profiles?.full_name || '—'}</span>
       <span style="font-size:12px;color:var(--text-3);">📅 ${formatDate(l.log_date)}</span>
-      <span style="font-size:12px;color:var(--text-3);">⏱️ ${parseFloat(l.hours_spent).toFixed(1)}h</span>
+      <span style="font-size:12px;color:var(--text-3);">⏱️ ${safeNum(l.hours_spent, 1)}h</span>
       ${categoryBadge(l.category)}
       ${l.sub_category ? `<span style="font-size:11px;color:var(--text-3);">${l.sub_category}</span>` : ''}
       ${l.is_completed ? '<span class="completed-badge" style="font-size:10px;">✅ Completed</span>' : ''}
@@ -1713,7 +1718,7 @@ async function loadApprovalsTab() {
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
               <span style="font-weight:800;font-size:14px;">👤 ${name}</span>
               <span style="font-size:11px;color:var(--text-3);">📅 ${formatDate(l.log_date)}</span>
-              <span style="font-size:11px;color:var(--text-3);">⏱️ ${parseFloat(l.hours_spent).toFixed(1)}h</span>
+              <span style="font-size:11px;color:var(--text-3);">⏱️ ${safeNum(l.hours_spent, 1)}h</span>
               ${l.category ? categoryBadge(l.category) : ''}
               <span style="font-size:11px;color:var(--text-3);">📋 ${truncate(l.task_project, 50)}</span>
               ${hasExtra ? `<span style="font-size:11px;color:var(--text-3);margin-left:auto;">${isOpen ? '▼ Hide details' : '▶ Show details'}</span>` : ''}
@@ -2341,7 +2346,7 @@ function showDrillDown(userStat, category, filtered, periodLabel) {
           <td class="td-sm">${formatDate(l.log_date)}</td>
           <td>${truncate(l.task_project,40)}</td>
           <td><span style="font-size:12px;color:var(--text-2);">${l.sub_category||'—'}</span></td>
-          <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
+          <td><strong>${safeNum(l.hours_spent, 1)}h</strong></td>
           <td class="td-sm td-muted">${l.accomplishment_status === 'pending' ? '<span style="color:var(--warning);font-weight:700;">🕒 Pending</span> ' : ''}${truncate(l.accomplishment,45)}</td>
         </tr>`).join('')}`;
   }
@@ -2666,7 +2671,7 @@ async function loadEmployeeAnalysis() {
                       <td class="td-sm">${formatDate(l.log_date)}</td>
                       <td>${truncate(l.task_project,35)}</td>
                       <td style="font-size:11px;color:var(--text-3);">${l.sub_category||'—'}</td>
-                      <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
+                      <td><strong>${safeNum(l.hours_spent, 1)}h</strong></td>
                       <td>${l.is_completed?'<span class="completed-badge">✅</span>':'—'}</td>
                     </tr>`).join('')}
                 </tbody></table>

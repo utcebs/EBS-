@@ -490,7 +490,7 @@ async function loadTodayLogs() {
         ${data.map(l => `<tr>
           <td>${truncate(l.task_project, 40)}</td>
           <td>${categoryBadge(l.category)}<span style="font-size:11px;color:var(--text-3);margin-left:6px;">${l.sub_category||''}</span></td>
-          <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
+          <td><strong>${safeNum(l.hours_spent, 1)}h</strong></td>
           <td class="td-muted td-sm">${truncate(l.accomplishment, 50)}</td>
         </tr>`).join('')}
       </tbody></table>

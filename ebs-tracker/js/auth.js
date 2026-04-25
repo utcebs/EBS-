@@ -55,7 +55,18 @@ async function login(email, password) {
 
 // ── Logout ────────────────────────────────────────────────────
 async function logout() {
-  await db.auth.signOut();
+  try {
+    const { error } = await db.auth.signOut();
+    if (error) {
+      // User clicked logout — give them logout. But surface the
+      // server-side failure so they know the session may still be
+      // active in Supabase even though local state is cleared.
+      console.warn('signOut error:', error);
+      try { if (typeof showToast === 'function') showToast('Sign-out incomplete on server — your session here is cleared', 'warning'); } catch (e) {}
+    }
+  } catch (e) {
+    console.warn('signOut network error:', e);
+  }
   localStorage.removeItem(SESSION_KEY);
   window.location.href = 'index.html';
 }

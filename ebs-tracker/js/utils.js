@@ -621,6 +621,14 @@ function truncate(str, n = 50) {
   return str && str.length > n ? str.slice(0, n) + '…' : (str || '—');
 }
 
+// ── safeNum: NaN-safe parseFloat → fixed-decimal display ────────
+// Wraps parseFloat(x).toFixed(d) so a null/undefined/non-numeric value
+// renders as '—' instead of "NaN" in the UI.
+function safeNum(x, decimals = 1, fallback = '—') {
+  const n = parseFloat(x);
+  return Number.isFinite(n) ? n.toFixed(decimals) : fallback;
+}
+
 // ── Mobile sidebar close ───────────────────────────────────
 function closeSidebar() {
   document.getElementById('app-sidebar')?.classList.remove('open');

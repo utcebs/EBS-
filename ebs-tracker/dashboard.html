@@ -361,7 +361,7 @@
         <td><strong>${l.team_member || l.profiles?.full_name || '—'}</strong></td>
         <td>${truncate(l.task_project, 40)}</td>
         <td>${categoryBadge(l.category)}<span style="font-size:11px;color:var(--text-3);display:block;margin-top:2px;">${l.sub_category||''}</span></td>
-        <td><strong>${parseFloat(l.hours_spent).toFixed(1)}h</strong></td>
+        <td><strong>${safeNum(l.hours_spent, 1)}h</strong></td>
         <td style="text-align:center;" onclick="event.stopPropagation()">
           ${canEdit
             ? `<input type="checkbox" ${l.is_completed?'checked':''} onchange="toggleCompleted('${l.id}',this.checked)" style="width:16px;height:16px;accent-color:var(--success);cursor:pointer;" title="Mark as completed">`
@@ -388,7 +388,7 @@
     body.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-size:12px;color:var(--text-3);font-weight:600;">📅 ${formatDate(l.log_date)}</span>
-        <span style="font-size:12px;color:var(--text-3);">⏱️ ${parseFloat(l.hours_spent).toFixed(1)}h</span>
+        <span style="font-size:12px;color:var(--text-3);">⏱️ ${safeNum(l.hours_spent, 1)}h</span>
         ${categoryBadge(l.category)}
         ${l.sub_category ? `<span style="font-size:11px;color:var(--text-3);">${l.sub_category}</span>` : ''}
         ${l.is_completed ? '<span class="completed-badge" style="font-size:10px;">✅ Completed</span>' : ''}
