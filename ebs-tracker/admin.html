@@ -267,17 +267,24 @@
 
     <!-- TAB: EMPLOYEE ANALYSIS -->
     <div id="tab-analysis" class="tab-content" style="display:none;">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
-        <div>
+      <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:24px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
           <div style="font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Select Employee</div>
-          <select class="form-control" id="analysisUserSel" style="min-width:220px;" onchange="loadEmployeeAnalysis()">
-            <option value="">Choose an employee…</option>
-          </select>
+          <div id="analysisUserButtons" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
-        <div id="analysisPeriodInfo" style="font-size:12px;color:var(--text-3);"></div>
+        <div id="analysisPeriodInfo" style="font-size:12px;color:var(--text-3);align-self:center;"></div>
       </div>
+      <style>
+        .ana-user-btn { padding:8px 14px;border-radius:999px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:8px;font-family:inherit; }
+        .ana-user-btn:hover { color:var(--text-1);border-color:rgba(255,255,255,0.32); }
+        .ana-user-btn.active { background:linear-gradient(135deg,var(--accent-dark),var(--accent));color:#080600;border-color:transparent;box-shadow:0 6px 18px -10px rgba(255,255,255,0.6); }
+        body.light-mode .ana-user-btn.active { background:linear-gradient(135deg,#5C4128,#7A5A38);color:#FAF9F6; }
+        body.light-mode .ana-user-btn:hover { border-color:rgba(26,22,18,0.32); }
+        .ana-user-btn .av { width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,0.12);font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;overflow:hidden; }
+        .ana-user-btn .av img { width:100%;height:100%;object-fit:cover; }
+      </style>
       <div id="analysisContent">
-        <div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-text">Select an employee above</div><div class="empty-sub">Their full performance dashboard will appear here</div></div>
+        <div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-text">Pick an employee above</div><div class="empty-sub">Their full performance dashboard will appear here</div></div>
       </div>
     </div>
 
@@ -826,6 +833,9 @@ async function init() {
 async function loadUsers() {
   const { data } = await db.from('profiles').select('id, username, full_name, role, email, avatar_url, created_at').order('full_name');
   allUsers = data || [];
+  // If the Analysis tab's button strip exists, refresh it so newly-created
+  // employees show up immediately and deleted ones disappear.
+  if (document.getElementById('analysisUserButtons')) initAnalysisTab();
 }
 
 async function loadAllLogs() {
@@ -1166,6 +1176,7 @@ async function addLeave() {
     document.getElementById('leaveStart').value   = '';
     document.getElementById('leaveEnd').value     = '';
     document.getElementById('leaveReason').value  = '';
+    invalidateWorkingTimeCaches();
     loadLeaveList();
   }
 }
@@ -1174,7 +1185,7 @@ async function deleteLeave(id) {
   if (!confirm('Remove this leave entry?')) return;
   const { error } = await db.from('employee_leaves').delete().eq('id', id);
   if (error) showToast('Failed: ' + error.message, 'error');
-  else { showToast('Leave removed', 'success'); loadLeaveList(); }
+  else { showToast('Leave removed', 'success'); invalidateWorkingTimeCaches(); loadLeaveList(); }
 }
 
 async function saveWarDays() {
@@ -2477,41 +2488,86 @@ async function saveAdminEdit() {
 }
 
 // ── Employee Analysis Tab ──────────────────────────────────
-async function initAnalysisTab() {
-  const sel = document.getElementById('analysisUserSel');
-  if (!sel) return;
-  if (sel.options.length <= 1) {
-    sel.innerHTML = '<option value="">Choose an employee…</option>';
-    allUsers.forEach(u => sel.appendChild(new Option(u.full_name, u.id)));
-  }
+// Per-employee selection state lives in module scope so re-renders
+// (e.g. user CRUD) don't lose the active employee.
+let _analysisActiveUid = null;
+// Module-scope caches — war_day_ranges almost never changes during a
+// session, employee_leaves change only when admin edits the leave list
+// (already invalidated there). Skip the round-trips on every employee
+// switch by reusing the cached arrays.
+let _warRangesCache = null;
+let _leavesCache = null;
+async function getWarRangesCached() {
+  if (_warRangesCache) return _warRangesCache;
+  const { data } = await db.from('war_day_ranges').select('start_date,end_date').order('start_date');
+  _warRangesCache = data || [];
+  return _warRangesCache;
 }
+async function getLeavesCached() {
+  if (_leavesCache) return _leavesCache;
+  const { data } = await db.from('employee_leaves').select('user_id, start_date, end_date');
+  _leavesCache = data || [];
+  return _leavesCache;
+}
+function invalidateWorkingTimeCaches() { _warRangesCache = null; _leavesCache = null; }
 
-async function loadEmployeeAnalysis() {
-  const uid = document.getElementById('analysisUserSel').value;
-  const container = document.getElementById('analysisContent');
-  if (!uid) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-text">Select an employee above</div></div>`;
+async function initAnalysisTab() {
+  // Render the employee button strip — buttons reflect allUsers, which
+  // is repopulated whenever an admin creates or deletes a user.
+  const host = document.getElementById('analysisUserButtons');
+  if (!host) return;
+  if (!allUsers.length) {
+    host.innerHTML = '<div style="font-size:12px;color:var(--text-3);">No employees yet.</div>';
     return;
   }
+  // If the previously-active uid was deleted, drop it.
+  if (_analysisActiveUid && !allUsers.find(u => u.id === _analysisActiveUid)) {
+    _analysisActiveUid = null;
+    document.getElementById('analysisContent').innerHTML = `<div class="empty-state"><div class="empty-icon">🔬</div><div class="empty-text">Pick an employee above</div></div>`;
+  }
+  host.innerHTML = allUsers.map(u => {
+    const ini = u.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+    const av = u.avatar_url
+      ? `<img src="${u.avatar_url}" alt="" onerror="this.outerHTML='${ini}'" />`
+      : ini;
+    const active = _analysisActiveUid === u.id ? ' active' : '';
+    return `<button class="ana-user-btn${active}" data-uid="${u.id}" onclick="loadEmployeeAnalysis('${u.id}')"><span class="av">${av}</span>${u.full_name}</button>`;
+  }).join('');
+}
 
+async function loadEmployeeAnalysis(uid) {
+  // Backwards-compat: callers that still pass nothing fall back to the
+  // previously-active selection (no-op if none).
+  uid = uid || _analysisActiveUid;
+  if (!uid) return;
+  _analysisActiveUid = uid;
+  // Update the active visual on the button strip
+  document.querySelectorAll('.ana-user-btn').forEach(b => b.classList.toggle('active', b.dataset.uid === uid));
+
+  const container = document.getElementById('analysisContent');
   container.innerHTML = `<div class="loading" style="margin:40px auto;flex-direction:column;gap:12px;"><div class="spinner" style="width:32px;height:32px;border-width:3px;"></div><span style="color:var(--text-3)">Loading analysis…</span></div>`;
 
   const user = allUsers.find(u => u.id === uid);
-  const [logsRes, leavesRes, warRes] = await Promise.all([
-    db.from('task_logs').select('*').eq('user_id', uid).order('log_date', { ascending: true }),
-    db.from('employee_leaves').select('start_date,end_date').eq('user_id', uid),
-    db.from('war_day_ranges').select('start_date,end_date').order('start_date'),
-  ]);
+  if (!user) { container.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Employee not found</div></div>`; return; }
 
-  const logs      = logsRes.data || [];
-  const leaves    = leavesRes.data || [];
-  const warRanges = warRes.data || [];
+  // Use the in-memory allLogs (loaded at admin init / refreshed on CRUD)
+  // instead of refetching the per-user task_logs every switch. Employee
+  // analysis switching used to trigger 3 RTTs every click; now it's 0
+  // RTTs in the common case (caches warm, badges fall back to existing
+  // user_badges rows).
+  const logs = allLogs
+    .filter(l => l.user_id === uid)
+    .sort((a, b) => (a.log_date || '').localeCompare(b.log_date || ''));
+  const [warRanges, allLeaves] = await Promise.all([getWarRangesCached(), getLeavesCached()]);
+  const leaves    = allLeaves.filter(l => l.user_id === uid).map(l => ({ start_date: l.start_date, end_date: l.end_date }));
   const wt        = getWorkingDaysInfo(0, leaves, warRanges, appStartDate);
   const stats     = calculateStats(logs);
-  // Admin-defined badges, fetched + auto-synced from the live tables.
-  await syncUserBadges(uid, stats);
+  // Render the analysis with the badges already known from cache (or empty).
+  // Then trigger syncUserBadges in the background so newly-earned badges
+  // show up after a tick without making the user wait.
   const { badges: activeBadges, earned: earnedSet } = await fetchUserBadges(uid);
   const badges    = activeBadges.map(b => ({ ...b, earned: earnedSet.has(b.id) }));
+  syncUserBadges(uid, stats).then(() => { /* fire-and-forget; UI may show new badges on next tab visit */ }).catch(() => {});
   const earnedCount = badges.filter(b => b.earned).length;
   const initials  = user.full_name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
   const heroInner = user.avatar_url

@@ -658,9 +658,17 @@ function applyTheme(theme) {
 function toggleTheme() {
   const current = localStorage.getItem(THEME_KEY) || 'dark';
   applyTheme(current === 'dark' ? 'light' : 'dark');
-  // Tell any visible chart-heavy view to repaint with theme-aware colors.
-  // Pages that don't define these handlers just ignore the event.
-  document.dispatchEvent(new Event('ebs:theme-changed'));
+  // Defer chart-repaint event to the next animation frame so the
+  // browser paints the new theme colors first. Without this, the
+  // expensive renderComparison() (50+ Chart.js instances rebuild)
+  // runs in the same task as the click → user perceives theme flip
+  // as laggy. With rAF, the CSS theme switch shows instantly and
+  // charts catch up a frame later.
+  if (typeof requestAnimationFrame !== 'undefined') {
+    requestAnimationFrame(() => document.dispatchEvent(new Event('ebs:theme-changed')));
+  } else {
+    setTimeout(() => document.dispatchEvent(new Event('ebs:theme-changed')), 0);
+  }
 }
 
 function injectThemeToggle() {
