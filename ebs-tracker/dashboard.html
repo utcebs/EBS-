@@ -429,9 +429,11 @@
 
   async function saveEdit() {
     if (!editingId) return;
+    const original = allLogs.find(l => l.id === editingId);
     const btn = document.getElementById('saveEditBtn');
     btn.disabled = true; btn.textContent = 'Saving…';
     const dateVal = document.getElementById('editDate').value;
+    const newAccomp = document.getElementById('editAccomp').value.trim();
     const updates = {
       team_member:      document.getElementById('editMember').value.trim(),
       log_date:         dateVal,
@@ -442,17 +444,45 @@
       category:         document.getElementById('editCategory').value,
       sub_category:     document.getElementById('editSubCategory').value.trim(),
       hours_spent:      parseFloat(document.getElementById('editHours').value),
-      accomplishment:   document.getElementById('editAccomp').value.trim(),
+      accomplishment:   newAccomp,
       comments_notes:   document.getElementById('editNotes').value.trim(),
     };
     if (!updates.task_project || !updates.hours_spent) {
       showToast('Task and hours are required', 'error');
       btn.disabled = false; btn.textContent = '💾 Save Changes'; return;
     }
+    // Approval rule: any change to a non-empty Key Accomplishment by
+    // an employee re-enters the admin approval queue. Admins editing
+    // any record from this same modal auto-approve (admin's edit IS
+    // the approval — same shortcut admin.html's openAdminEdit takes).
+    // Unchanged accomplishment leaves status alone.
+    const oldAccomp = (original?.accomplishment || '').trim();
+    const accChanged = newAccomp !== oldAccomp;
+    const isAdminEdit = session.role === 'admin';
+    if (accChanged) {
+      if (isAdminEdit) {
+        updates.accomplishment_status = 'approved';
+        updates.approved_by = session.id;
+        updates.approved_at = new Date().toISOString();
+        updates.rejection_reason = null;
+      } else if (newAccomp) {
+        updates.accomplishment_status = 'pending';
+        updates.approved_by = null;
+        updates.approved_at = null;
+        updates.rejection_reason = null;
+      } else {
+        // Cleared the accomplishment — reset to default 'approved' so
+        // it doesn't sit in the queue as an empty pending row.
+        updates.accomplishment_status = 'approved';
+        updates.approved_by = null;
+        updates.approved_at = null;
+        updates.rejection_reason = null;
+      }
+    }
     const { error } = await db.from('task_logs').update(updates).eq('id', editingId);
     if (error) { showToast('Failed to save: ' + error.message, 'error'); }
     else {
-      showToast('Changes saved!', 'success');
+      showToast(accChanged && newAccomp && !isAdminEdit ? 'Changes saved — accomplishment sent for admin approval 🕒' : 'Changes saved!', 'success');
       closeEditModal();
       await loadLogs();
       renderTable();
