@@ -2688,7 +2688,7 @@ async function loadEmployeeAnalysis(uid) {
   const monthLogs = logs.filter(l => l.month === thisMonth);
 
   document.getElementById('analysisPeriodInfo').textContent =
-    `${wt.periodLabel} · ${wt.workingDays} working days · ${wt.leaveDays} leave days`;
+    `${wt.periodLabel} · ${wt.workingDays} working days · ${wt.leaveDays} leave days${wt.warDaysOff > 0 ? ` · ${wt.warDaysOff} war day${wt.warDaysOff === 1 ? '' : 's'}` : ''}`;
 
   container.innerHTML = `
     <!-- Hero -->
@@ -2708,6 +2708,7 @@ async function loadEmployeeAnalysis(uid) {
       ${wt.workingDays} working days &nbsp;·&nbsp;
       ${wt.leaveDays} leave days excluded &nbsp;·&nbsp;
       ${wt.holidayCount} public holidays &nbsp;·&nbsp;
+      ${wt.warDaysOff > 0 ? `${wt.warDaysOff} war day${wt.warDaysOff === 1 ? '' : 's'} off &nbsp;·&nbsp;` : ''}
       Expected: <strong style="color:var(--text-1)">${wt.expectedHours}h</strong>
     </div>
 
