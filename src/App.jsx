@@ -814,12 +814,20 @@ function Dashboard() {
   }
 
   const summaryCards = [
-    { label: 'Total Projects', value: total, icon: FolderKanban, color: 'bg-brand-600', onClick: () => setDrillDown({ title: `All Projects (${total})`, projects }) },
-    { label: 'On Track', value: onTrack, icon: CheckCircle2, color: 'bg-emerald-500', onClick: () => drillStatus('On Track') },
-    { label: 'At Risk / Delayed', value: atRisk, icon: AlertTriangle, color: 'bg-red-500', onClick: () => { const f = projects.filter(p => p.status === 'At Risk' || p.status === 'Delayed'); setDrillDown({ title: `At Risk & Delayed (${f.length})`, projects: f }) } },
-    { label: 'Completed', value: completed, icon: Target, color: 'bg-blue-500', onClick: () => drillStatus('Completed') },
-    { label: 'On Hold', value: onHold, icon: Pause, color: 'bg-slate-400', onClick: () => drillStatus('On Hold') },
+    { kpi: 'total',     label: 'Total Projects',     value: total,     icon: FolderKanban,    color: 'bg-brand-600',    onClick: () => setDrillDown({ title: `All Projects (${total})`, projects }) },
+    { kpi: 'onTrack',   label: 'On Track',           value: onTrack,   icon: CheckCircle2,    color: 'bg-emerald-500',  onClick: () => drillStatus('On Track') },
+    { kpi: 'atRisk',    label: 'At Risk / Delayed',  value: atRisk,    icon: AlertTriangle,   color: 'bg-red-500',      onClick: () => { const f = projects.filter(p => p.status === 'At Risk' || p.status === 'Delayed'); setDrillDown({ title: `At Risk & Delayed (${f.length})`, projects: f }) } },
+    { kpi: 'completed', label: 'Completed',          value: completed, icon: Target,          color: 'bg-blue-500',     onClick: () => drillStatus('Completed') },
+    { kpi: 'onHold',    label: 'On Hold',            value: onHold,    icon: Pause,           color: 'bg-slate-400',    onClick: () => drillStatus('On Hold') },
   ]
+
+  // Projects added this month — feeds the editorial closer at the bottom
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const monthName = now.toLocaleDateString('en-US', { month: 'long' })
+  const newThisMonth = projects
+    .filter(p => p.created_at && new Date(p.created_at) >= monthStart)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
   // Clickable pie chart handler
   const onPieClick = (data, type) => {
@@ -847,10 +855,10 @@ function Dashboard() {
       </div>
     </div>
 
-    {/* Summary Cards — all clickable */}
+    {/* Summary Cards — each gets a data-kpi tint (dark-mode aesthetic layer) */}
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8 stagger">
-      {summaryCards.map(({ label, value, icon: Icon, color, onClick }) => (
-        <div key={label} onClick={onClick}
+      {summaryCards.map(({ kpi, label, value, icon: Icon, color, onClick }) => (
+        <div key={label} data-kpi={kpi} onClick={onClick}
           className="bg-white rounded-2xl p-4 border border-surface-200 shadow-sm animate-fade-in hover:shadow-md hover:border-brand-200 transition-all cursor-pointer group">
           <div className="flex items-center gap-2 mb-3">
             <div className={`p-1.5 rounded-lg ${color} group-hover:scale-110 transition-transform`}><Icon size={14} className="text-white" /></div>
@@ -864,7 +872,7 @@ function Dashboard() {
 
     {/* Charts — clickable segments */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      <div className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
+      <div data-accent="status" className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
         <h3 className="text-sm font-semibold text-surface-700 mb-1">Status Breakdown</h3>
         <p className="text-xs text-surface-400 mb-4">Click a segment to see projects</p>
         <ResponsiveContainer width="100%" height={260}>
@@ -879,7 +887,7 @@ function Dashboard() {
         </ResponsiveContainer>
       </div>
 
-      <div className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
+      <div data-accent="priority" className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
         <h3 className="text-sm font-semibold text-surface-700 mb-1">Priority Breakdown</h3>
         <p className="text-xs text-surface-400 mb-4">Click a segment to see projects</p>
         <ResponsiveContainer width="100%" height={260}>
@@ -894,7 +902,7 @@ function Dashboard() {
         </ResponsiveContainer>
       </div>
 
-      <div className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
+      <div data-accent="owner" className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
         <h3 className="text-sm font-semibold text-surface-700 mb-1">Projects by Owner</h3>
         <p className="text-xs text-surface-400 mb-4">Click a bar to see projects</p>
         <ResponsiveContainer width="100%" height={260}>
@@ -908,7 +916,7 @@ function Dashboard() {
         </ResponsiveContainer>
       </div>
 
-      <div className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
+      <div data-accent="phase" className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
         <h3 className="text-sm font-semibold text-surface-700 mb-1">Projects by Phase</h3>
         <p className="text-xs text-surface-400 mb-4">Click a bar to see projects</p>
         <ResponsiveContainer width="100%" height={260}>
@@ -954,6 +962,30 @@ function Dashboard() {
         </div>
       </div>
     </div>
+
+    {/* Editorial closer — projects added this month */}
+    <section className="dash-month-section">
+      <div className="dash-month-eyebrow">New This Month</div>
+      <h2 className="dash-month-title">{monthName}<span className="yr">'{String(now.getFullYear()).slice(2)}</span></h2>
+      <p className="dash-month-sub">{newThisMonth.length} {newThisMonth.length === 1 ? 'project' : 'projects'} created since {monthStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</p>
+      {newThisMonth.length === 0 ? (
+        <div className="dash-month-empty">A quiet stretch — no new projects yet this month.</div>
+      ) : (
+        <div className="dash-month-list">
+          {newThisMonth.map((p, i) => (
+            <div key={p.id} className="dash-month-row" onClick={() => navigate(`/projects/${p.id}`)}>
+              <div className="dash-month-num">{String(i + 1).padStart(2, '0')}</div>
+              <div>
+                <div className="dash-month-name">{p.project_name}</div>
+                <div className="dash-month-meta">{p.business_owner || 'Unassigned'} · {p.phase || '—'}</div>
+              </div>
+              <StatusBadge status={p.status} />
+              <div className="dash-month-date">{new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
 
     {/* Drill-down modal */}
     <DrillDownModal open={!!drillDown} onClose={() => setDrillDown(null)}

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -370,4 +372,175 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   opacity: 0.025;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   mix-blend-mode: overlay;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   PORTFOLIO DASHBOARD — tinted KPI cards + chart panels + editorial
+   "New This Month" closer. Lives on top of the .app-dark base layer
+   to give each card its own color identity without breaking the
+   shared dark canvas.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* KPI card tinted background. Each card carries its own semantic color
+   via a radial glow in the top-right + a 1px accent strip on top.
+   Variables let one rule template all five tints. */
+.app-dark [data-kpi] {
+  --kpi-color: 99,102,241;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 90% at 100% 0%, rgba(var(--kpi-color), 0.18), transparent 70%),
+    linear-gradient(180deg, rgba(var(--kpi-color), 0.06), rgba(255,255,255,0.04)) !important;
+  border-color: rgba(var(--kpi-color), 0.22) !important;
+  transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+}
+.app-dark [data-kpi]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--kpi-color), 0.85), transparent);
+}
+.app-dark [data-kpi]:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 40px -16px rgba(var(--kpi-color), 0.45);
+  border-color: rgba(var(--kpi-color), 0.45) !important;
+}
+.app-dark [data-kpi="total"]    { --kpi-color: 129,140,248; }   /* indigo */
+.app-dark [data-kpi="onTrack"]  { --kpi-color:  52,211,153; }   /* emerald */
+.app-dark [data-kpi="atRisk"]   { --kpi-color: 251, 113,133; }  /* rose */
+.app-dark [data-kpi="completed"]{ --kpi-color:  56,189,248; }   /* sky */
+.app-dark [data-kpi="onHold"]   { --kpi-color: 251,191, 36; }   /* amber */
+
+/* Chart cards: same template but with a different visual rhythm —
+   the accent is a solid 2px strip at the top + a faint corner glow. */
+.app-dark [data-accent] {
+  --acc-color: 148,163,184;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 50% 80% at 0% 100%, rgba(var(--acc-color), 0.10), transparent 65%),
+    linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.025)) !important;
+  border-color: rgba(var(--acc-color), 0.18) !important;
+}
+.app-dark [data-accent]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(var(--acc-color), 0.55), rgba(var(--acc-color), 0.15) 60%, transparent);
+}
+.app-dark [data-accent="status"]   { --acc-color: 167,139,250; }  /* violet */
+.app-dark [data-accent="priority"] { --acc-color: 251,113,133; }  /* rose */
+.app-dark [data-accent="owner"]    { --acc-color: 103,232,249; }  /* cyan */
+.app-dark [data-accent="phase"]    { --acc-color:  52,211,153; }  /* emerald */
+
+/* Editorial "New This Month" closer ─────────────────────────────────
+   Light-mode is the default; .app-dark overrides flip to dark. */
+.dash-month-section { position: relative; margin-top: 2.5rem; padding: 2.5rem 0 1rem; border-top: 1px solid rgba(26,22,18,0.08); }
+.app-dark .dash-month-section { border-top-color: rgba(255,255,255,0.08); }
+
+.dash-month-eyebrow {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.32em; text-transform: uppercase;
+  color: rgba(26,22,18,0.45);
+  margin-bottom: 0.75rem;
+}
+.app-dark .dash-month-eyebrow { color: rgba(255,255,255,0.5); }
+
+.dash-month-title {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-weight: 400;
+  font-size: clamp(48px, 8vw, 92px);
+  line-height: 0.95; letter-spacing: -0.02em;
+  color: #1a1612;
+}
+.app-dark .dash-month-title { color: rgba(255,255,255,0.96); }
+
+.dash-month-title .yr {
+  font-style: italic;
+  font-size: 0.55em;
+  color: rgba(26,22,18,0.45);
+  margin-left: 0.3em;
+  letter-spacing: 0.01em;
+}
+.app-dark .dash-month-title .yr { color: rgba(255,255,255,0.45); }
+
+.dash-month-sub {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: rgba(26,22,18,0.55);
+  margin-top: 0.5rem; margin-bottom: 2rem;
+}
+.app-dark .dash-month-sub { color: rgba(255,255,255,0.55); }
+
+/* Numbered project list — big ghost numerals, project as the headline */
+.dash-month-list { display: flex; flex-direction: column; gap: 0; }
+.dash-month-row {
+  display: grid;
+  grid-template-columns: 80px 1fr auto auto;
+  gap: 16px; align-items: center;
+  padding: 18px 8px;
+  border-top: 1px solid rgba(26,22,18,0.08);
+  cursor: pointer;
+  transition: background-color .25s ease, padding .25s ease;
+}
+.dash-month-row:last-child { border-bottom: 1px solid rgba(26,22,18,0.08); }
+.dash-month-row:hover { background: linear-gradient(90deg, rgba(26,22,18,0.04), transparent); padding-left: 16px; }
+.app-dark .dash-month-row { border-top-color: rgba(255,255,255,0.06); }
+.app-dark .dash-month-row:last-child { border-bottom-color: rgba(255,255,255,0.06); }
+.app-dark .dash-month-row:hover { background: linear-gradient(90deg, rgba(255,255,255,0.025), transparent); }
+
+.dash-month-num {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-weight: 400; font-size: 56px; line-height: 1;
+  color: rgba(26,22,18,0.14);
+  font-feature-settings: 'lnum' 1, 'tnum' 1;
+  transition: color .25s ease;
+}
+.dash-month-row:hover .dash-month-num { color: rgba(26,22,18,0.55); }
+.app-dark .dash-month-num { color: rgba(255,255,255,0.16); }
+.app-dark .dash-month-row:hover .dash-month-num { color: rgba(255,255,255,0.55); }
+
+.dash-month-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 18px; font-weight: 600;
+  color: #1a1612;
+  letter-spacing: -0.005em; line-height: 1.25;
+}
+.app-dark .dash-month-name { color: rgba(255,255,255,0.92); }
+
+.dash-month-meta {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: rgba(26,22,18,0.55);
+  margin-top: 4px; letter-spacing: 0.02em;
+}
+.app-dark .dash-month-meta { color: rgba(255,255,255,0.5); }
+
+.dash-month-date {
+  font-family: 'DM Sans', sans-serif;
+  font-feature-settings: 'tnum' 1;
+  font-size: 11px;
+  color: rgba(26,22,18,0.45);
+  text-transform: uppercase; letter-spacing: 0.16em; white-space: nowrap;
+}
+.app-dark .dash-month-date { color: rgba(255,255,255,0.4); }
+
+.dash-month-empty {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic; font-size: 22px;
+  color: rgba(26,22,18,0.4);
+  padding: 32px 0; text-align: center;
+  border-top: 1px solid rgba(26,22,18,0.08);
+  border-bottom: 1px solid rgba(26,22,18,0.08);
+}
+.app-dark .dash-month-empty { color: rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.06); }
+
+@media (max-width: 640px) {
+  .dash-month-row { grid-template-columns: 56px 1fr auto; gap: 12px; padding: 14px 4px; }
+  .dash-month-row > .dash-month-date { display: none; }
+  .dash-month-num { font-size: 40px; }
+  .dash-month-name { font-size: 16px; }
 }
