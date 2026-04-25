@@ -1,11 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import { Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase, supabasePublic } from './supabaseClient'
 import LandingPage from './components/LandingPage'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from 'recharts'
 import {
   LayoutDashboard, FolderKanban, GanttChart as GanttIcon, LogIn, LogOut,
   Users, Plus, Pencil, Trash2, X, ChevronRight, AlertTriangle,
@@ -15,8 +11,15 @@ import {
   Upload, Download, FileSpreadsheet, Presentation, Sparkles,
   FileText, UserCog, User, Sun, Moon
 } from 'lucide-react'
-import PptxGenJS from 'pptxgenjs'
-import * as XLSX from 'xlsx'
+
+// Heavy deps lazy-loaded on first use. Pays the download cost once
+// per session at click time instead of bloating the main bundle.
+const loadXLSX = () => import('xlsx')
+const loadPptx = () => import('pptxgenjs').then(m => m.default)
+// Dashboard charts are rendered behind a Suspense boundary so the
+// recharts vendor (~80 KB gzipped) only ships when the dashboard route
+// actually mounts.
+const DashboardCharts = React.lazy(() => import('./components/DashboardCharts'))
 
 // ─── Toast (lightweight, top-right, auto-dismiss) ───────────
 // Self-contained so main.jsx can call it from a global error handler
@@ -281,7 +284,8 @@ function EmptyState({ icon: Icon, title, description, action }) {
 function Spinner() { return <div className="flex items-center justify-center py-20"><RefreshCw className="animate-spin text-brand-500" size={28} /></div> }
 
 // ─── Bulk Upload Template Download ──────────────────────────
-function downloadTemplate() {
+async function downloadTemplate() {
+  const XLSX = await loadXLSX()
   const headers = ['Project Name','Objective/Goal','Dept / Module','Business Owner','Priority','Status','Phase','Est Start (YYYY-MM)','Start Date (YYYY-MM)','End Date (YYYY-MM)','% Complete','Total Cost (KWD)','Business Impact','Cost Remarks','Dependencies','Key Risks','Mitigation','Notes / Updates','Actions Needed']
   const sample = ['Sample Project','Objective here','EBS/IT','John Doe','High','On Track','Execution','2026-01','2026-01','2026-06','50','1000','High','Budget approved','None','Scope creep','Weekly reviews','On schedule','Complete phase 1']
   const ws = XLSX.utils.aoa_to_sheet([headers, sample])
@@ -296,6 +300,7 @@ function downloadTemplate() {
 }
 
 async function parseBulkUpload(file) {
+  const XLSX = await loadXLSX()
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -336,7 +341,8 @@ const MILESTONE_FIELD_MAP = {
   'Development Status':'development_status','UAT Status':'uat_status','Dependencies':'dependencies',
   'Owner':'owner','Remarks':'remarks',
 }
-function downloadMilestoneTemplate() {
+async function downloadMilestoneTemplate() {
+  const XLSX = await loadXLSX()
   const sample = ['Sample Deliverable','2026-06-30','','In Progress','Not Started','None','John Doe','On track']
   const ws = XLSX.utils.aoa_to_sheet([MILESTONE_HEADERS, sample])
   ws['!cols'] = MILESTONE_HEADERS.map(() => ({ wch: 22 }))
@@ -347,6 +353,7 @@ function downloadMilestoneTemplate() {
   XLSX.writeFile(wb, 'EBS_Milestones_Template.xlsx')
 }
 async function parseMilestoneBulk(file) {
+  const XLSX = await loadXLSX()
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -375,7 +382,8 @@ const RISK_FIELD_MAP = {
   'Risk / Issue Description':'description','Impact':'impact','Likelihood':'likelihood',
   'Mitigation Action':'mitigation_action','Owner':'owner',
 }
-function downloadRiskTemplate() {
+async function downloadRiskTemplate() {
+  const XLSX = await loadXLSX()
   const sample = ['Sample risk description','High','Medium','Weekly review','Jane Smith']
   const ws = XLSX.utils.aoa_to_sheet([RISK_HEADERS, sample])
   ws['!cols'] = RISK_HEADERS.map(() => ({ wch: 22 }))
@@ -386,6 +394,7 @@ function downloadRiskTemplate() {
   XLSX.writeFile(wb, 'EBS_Risks_Template.xlsx')
 }
 async function parseRiskBulk(file) {
+  const XLSX = await loadXLSX()
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -410,6 +419,7 @@ async function parseRiskBulk(file) {
 
 // ─── Export all projects/milestones/risks/gantt-data to Excel ───
 async function exportAllToExcel(projects) {
+  const XLSX = await loadXLSX()
   // Fetch milestones + risks via supabasePublic
   const [{ data: ms }, { data: rs }] = await Promise.all([
     supabasePublic.from('milestones').select('*').order('project_id').order('milestone_number'),
@@ -487,6 +497,7 @@ async function exportAllToExcel(projects) {
 
 // ─── PPTX Report Generation ────────────────────────────────
 async function generateReport(projects) {
+  const PptxGenJS = await loadPptx()
   const pptx = new PptxGenJS()
   pptx.defineLayout({ name: 'CUSTOM', width: 13.33, height: 7.5 })
   pptx.layout = 'CUSTOM'
@@ -920,67 +931,15 @@ function Dashboard() {
       ))}
     </div>
 
-    {/* Charts — clickable segments */}
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      <div data-accent="status" className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
-        <h3 className="text-sm font-semibold text-surface-700 mb-1">Status Breakdown</h3>
-        <p className="text-xs text-surface-400 mb-4">Click a segment to see projects</p>
-        <ResponsiveContainer width="100%" height={260}>
-          <PieChart>
-            <Pie data={byStatus} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value"
-              label={({ name, value }) => `${name} (${value})`} labelLine={false}
-              onClick={(d) => onPieClick(d, 'status')} cursor="pointer">
-              {byStatus.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-            </Pie>
-            <RTooltip />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div data-accent="priority" className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
-        <h3 className="text-sm font-semibold text-surface-700 mb-1">Priority Breakdown</h3>
-        <p className="text-xs text-surface-400 mb-4">Click a segment to see projects</p>
-        <ResponsiveContainer width="100%" height={260}>
-          <PieChart>
-            <Pie data={byPriority} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value"
-              label={({ name, value }) => `${name} (${value})`} labelLine={false}
-              onClick={(d) => onPieClick(d, 'priority')} cursor="pointer">
-              {byPriority.map((_, i) => <Cell key={i} fill={PRI_PIE_COLORS[i % PRI_PIE_COLORS.length]} />)}
-            </Pie>
-            <RTooltip />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div data-accent="owner" className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
-        <h3 className="text-sm font-semibold text-surface-700 mb-1">Projects by Owner</h3>
-        <p className="text-xs text-surface-400 mb-4">Click a bar to see projects</p>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={ownerData} layout="vertical" margin={{ left: 10, right: 20 }}>
-            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
-            <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 10 }} />
-            <RTooltip />
-            <Bar dataKey="value" fill="#4c6ef5" radius={[0, 6, 6, 0]} barSize={18}
-              onClick={(d) => drillOwner(d.fullName || d.name)} cursor="pointer" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div data-accent="phase" className="bg-white rounded-2xl p-6 border border-surface-200 shadow-sm">
-        <h3 className="text-sm font-semibold text-surface-700 mb-1">Projects by Phase</h3>
-        <p className="text-xs text-surface-400 mb-4">Click a bar to see projects</p>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={byPhase} margin={{ bottom: 20 }}>
-            <XAxis dataKey="name" tick={{ fontSize: 11, angle: -20, textAnchor: 'end' }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-            <RTooltip />
-            {/* Bar fill is brighter than the panel's emerald tint so it glows against the surface */}
-            <Bar dataKey="value" fill="#a3e635" radius={[6, 6, 0, 0]} barSize={32}
-              onClick={(d) => drillPhase(d.name)} cursor="pointer" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
+    {/* Charts — recharts ships in its own chunk; Suspense covers the
+        moment between dashboard render and chart code arrival. */}
+    <Suspense fallback={<div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"><div className="bg-white rounded-2xl p-6 border border-surface-200 h-[340px] animate-pulse" /><div className="bg-white rounded-2xl p-6 border border-surface-200 h-[340px] animate-pulse" /></div>}>
+      <DashboardCharts
+        byStatus={byStatus} byPriority={byPriority} ownerData={ownerData} byPhase={byPhase}
+        PIE_COLORS={PIE_COLORS} PRI_PIE_COLORS={PRI_PIE_COLORS}
+        onPieClick={onPieClick} drillOwner={drillOwner} drillPhase={drillPhase}
+      />
+    </Suspense>
 
     {/* At Risk & Recently Updated */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
