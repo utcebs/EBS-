@@ -278,6 +278,17 @@ export default function LandingPage({ isAdmin }) {
             <span>Analytics</span>
           </div>
         </div>
+
+        {/* Bottom-right corner watermark — the same Union Trading
+            wordmark, sized small as a subtle branding note in the
+            black animation area. pointer-events-none so it never
+            steals clicks from the eyebrow CTAs above. */}
+        <img
+          src="./union-trading-logo-white.png"
+          alt=""
+          aria-hidden="true"
+          className="absolute right-4 bottom-4 sm:right-6 sm:bottom-6 w-32 sm:w-40 lg:w-48 h-auto opacity-60 pointer-events-none drop-shadow-[0_4px_24px_rgba(255,255,255,0.18)]"
+        />
       </section>
 
       {/* ─── Description ─────────────────────────────────────── */}
