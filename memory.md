@@ -609,3 +609,9 @@ After auditing every export / template / bulk-upload path against the live schem
 - **Heavy deps lazy-loaded** via `loadXLSX()` / `loadPptx()` factories at the top of `src/App.jsx`. Each XLSX-using function (and `generateReport`) starts with `const XLSX = await loadXLSX()` so the chunk only ships on first use.
 - **`requestAnimationFrame` defer pattern** for events that trigger heavy synchronous work — used by `toggleTheme()` so CSS theme flip paints first, charts catch up a frame later.
 - **ErrorBoundary + global handlers** are the new safety net. Any new component that does heavy async work in render should still try/catch internally; the boundary catches what slips through.
+
+### Approvals tab — full lifecycle (commit `7879545`)
+Was pending-only. Now has a chip filter row at the top: **Pending** (default) / **Approved** / **Rejected** / **All**. Each row's left accent stripe + status pill matches its state (amber / green / red). Approved + Rejected rows surface "who decided + when" inline via a second FK-disambiguated join on `profiles!approved_by` (the same disambiguation pattern the Records tab uses). Rejection reason shows in the expandable details section for rejected entries. Action buttons adapt per state — Pending: ✓ Approve / ⛔ Reject; Approved: ↺ Move to Pending; Rejected: ✓ Approve / ↺ Move to Pending. The new `revertApprovalStatus(id, newStatus)` handler clears `approved_by` / `approved_at` and (for pending) `rejection_reason`. Tab title shortened from "Pending Approvals" → "Approvals" since it now covers every state, but the count badge still tracks pending only — that's what admin needs to act on.
+
+### Team Overview radar grid (commit `c0144b0`)
+Per-employee radar's web grid was `rgba(148,163,184,0.15)` — slate at 15% — barely visible on the black canvas. Switched to theme-aware values inline: dark = `rgba(255,255,255,0.28)`, light = `rgba(26,22,18,0.18)`. Same treatment for `angleLines` and `pointLabels.color`.
