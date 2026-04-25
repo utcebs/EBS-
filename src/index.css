@@ -691,3 +691,71 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   .dash-month-num { font-size: 40px; }
   .dash-month-name { font-size: 16px; }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   GOLD THEME OVERLAY — premium black + gold direction (React app)
+   Pairs with the overlay at the bottom of ebs-tracker/css/style.css.
+   Touches dark-theme accents only; semantic data colors (KPI tints,
+   chart category palettes, status pills) stay on their palettes.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* Editorial month closer — gold numerals + gold italic year suffix */
+.app-dark .dash-month-eyebrow { color: rgba(230,201,120,0.85); letter-spacing: 0.34em; }
+.app-dark .dash-month-title .yr { color: rgba(230,201,120,0.78); font-style: italic; }
+.app-dark .dash-month-num { color: rgba(230,201,120,0.32) !important; }
+.app-dark .dash-month-row:hover .dash-month-num { color: rgba(244,220,148,1) !important; }
+.app-dark .dash-month-section { border-top-color: rgba(230,201,120,0.16); }
+
+/* Card top-edge gold sheen — same hairline thread as the EBS tracker.
+   Sits above the existing data-kpi/data-accent strips, picks up only
+   on plain bg-white panels (the "At Risk", "Recently Updated" etc.). */
+.app-dark .bg-white {
+  border-color: rgba(230,201,120,0.16) !important;
+  position: relative;
+}
+.app-dark .bg-white::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 16px; right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(230,201,120,0.50), transparent);
+  pointer-events: none;
+  border-radius: inherit;
+}
+/* Don't double-up on cards that already carry a tinted strip via
+   data-kpi / data-accent — let those keep their semantic accent line */
+.app-dark [data-kpi]::before,
+.app-dark [data-accent]::before { z-index: 1; }
+.app-dark [data-kpi]::after,
+.app-dark [data-accent]::after { display: none; }
+.app-dark [data-kpi]::before { background: linear-gradient(90deg, transparent, rgba(var(--kpi-color), 1), transparent); }
+
+/* Page title + display headings get warm ivory */
+.app-dark .text-surface-900,
+.app-dark .font-display { color: #FAF6E8 !important; }
+
+/* Primary buttons (Generate MBR etc.) — gold border + glow */
+.app-dark button.bg-surface-900 {
+  border: 1px solid rgba(230,201,120,0.55) !important;
+  box-shadow: 0 0 0 1px rgba(230,201,120,0.10), 0 4px 14px -8px rgba(230,201,120,0.30) !important;
+}
+.app-dark button.bg-surface-900:hover {
+  border-color: rgba(244,220,148,0.85) !important;
+  box-shadow: 0 0 0 1px rgba(230,201,120,0.18), 0 8px 24px -10px rgba(230,201,120,0.45) !important;
+}
+
+/* Form controls focus → gold ring */
+.app-dark select.bg-white:focus,
+.app-dark input.bg-white:focus {
+  border-color: rgba(230,201,120,0.70) !important;
+  box-shadow: 0 0 0 3px rgba(230,201,120,0.15) !important;
+  outline: none;
+}
+
+/* Hover hint "Click to view →" on KPI cards goes gold instead of brand-blue */
+.app-dark [data-kpi] > p:nth-of-type(3) { color: rgba(230,201,120,0.85) !important; }
+
+/* Sidebar active link gets a thin gold left rule */
+.app-dark .bg-brand-50,
+.app-dark .text-brand-700,
+.app-dark .text-brand-600 { color: #E6C978 !important; }

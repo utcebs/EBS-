@@ -920,3 +920,60 @@ body.light-mode .menu-toggle { background: #FFFFFF; border-color: #C8C2B4; color
   /* Badge cards in the admin Badges tab compact */
   #badgesGrid > .card { padding: 12px; }
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   GOLD THEME OVERLAY — premium black + gold direction
+   Applies to dark mode only. Light mode keeps its cream + brown palette
+   untouched. Cleanly reverts via `git revert` of this block (and the
+   matching overlay at the bottom of src/index.css).
+   ──────────────────────────────────────────────────────────────────── */
+:root {
+  --accent:       #E6C978;
+  --accent-light: #F4DC94;
+  --accent-dark:  #B89B5C;
+  --accent-glow:  rgba(230,201,120,0.18);
+}
+
+/* Theme toggle pill picks up gold glow */
+.theme-toggle { box-shadow: 0 0 0 1px rgba(230,201,120,0.35), 0 6px 24px -10px rgba(230,201,120,0.30) !important; }
+
+/* Card top-edge sheen — a hairline gold thread on every .card so the
+   premium vibe runs uniformly across the surface chrome. Light mode
+   (body.light-mode) suppresses it. */
+body:not(.light-mode) .card {
+  position: relative;
+  border-color: rgba(230,201,120,0.16) !important;
+}
+body:not(.light-mode) .card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 16px; right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(230,201,120,0.55), transparent);
+  pointer-events: none;
+}
+
+/* Section titles + page titles pick up a warmer ivory in dark */
+body:not(.light-mode) .card-title-lg,
+body:not(.light-mode) .page-title { color: #FAF6E8; }
+
+/* Sidebar active nav: gold gradient instead of white */
+body:not(.light-mode) .sidebar-nav a.active {
+  background: linear-gradient(135deg, rgba(230,201,120,0.18), rgba(230,201,120,0.05)) !important;
+  border-left: 2px solid #E6C978 !important;
+  color: #FAF6E8 !important;
+}
+
+/* Form focus ring shifts to gold */
+body:not(.light-mode) input:focus,
+body:not(.light-mode) select:focus,
+body:not(.light-mode) textarea:focus {
+  border-color: rgba(230,201,120,0.60) !important;
+  box-shadow: 0 0 0 3px rgba(230,201,120,0.12) !important;
+  outline: none !important;
+}
+
+/* Status pills, semantic colors (success/warning/danger/info), category
+   badges (Support/Testing/Project), and the per-employee KPI tints stay
+   on their semantic palettes — meaning-bearing color shouldn't get
+   recolored to gold. */
