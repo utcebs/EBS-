@@ -60,7 +60,7 @@
     <div class="admin-tabs">
       <button class="admin-tab active" onclick="switchTab('users')">👥 Users</button>
       <button class="admin-tab" onclick="switchTab('records')">📋 Records</button>
-      <button class="admin-tab" onclick="switchTab('approvals')">🕒 Pending Approvals <span id="approvalsCountBadge" style="display:none;background:var(--warning);color:#080600;font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;margin-left:4px;"></span></button>
+      <button class="admin-tab" onclick="switchTab('approvals')">🕒 Approvals <span id="approvalsCountBadge" style="display:none;background:var(--warning);color:#080600;font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;margin-left:4px;"></span></button>
       <button class="admin-tab" onclick="switchTab('comparison')">👥 Team Overview</button>
       <button class="admin-tab" onclick="switchTab('analysis')">🔬 Employee Analysis</button>
       <button class="admin-tab" onclick="switchTab('export')">📤 Export</button>
@@ -167,11 +167,15 @@
     <div id="tab-approvals" class="tab-content" style="display:none;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;">
         <div>
-          <h2 class="page-title" style="font-size:18px;margin:0;">🕒 Pending Accomplishment Approvals</h2>
-          <p class="page-subtitle" style="margin:4px 0 0;">Approve or reject Key Accomplishments before they're counted in stats and publicly visible.</p>
+          <h2 class="page-title" style="font-size:18px;margin:0;">🕒 Accomplishment Approvals</h2>
+          <p class="page-subtitle" style="margin:4px 0 0;">Approve or reject Key Accomplishments. Use the filter to review past decisions.</p>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="loadApprovalsTab()">🔄 Refresh</button>
       </div>
+
+      <!-- Status filter chips — Pending (default), Approved, Rejected, All -->
+      <div id="approvalsFilterBar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"></div>
+
       <div id="approvalsList" style="display:flex;flex-direction:column;gap:12px;">
         <div class="loading"><div class="spinner"></div> Loading…</div>
       </div>
@@ -1698,58 +1702,129 @@ async function refreshApprovalsCountBadge() {
   } catch (e) { /* migration not applied — silently skip */ }
 }
 
+// Active filter on the Approvals tab. Defaults to 'pending' so admin
+// always lands on the queue that needs action; can be changed via the
+// chip row to view 'approved' / 'rejected' / 'all' history.
+let _approvalsFilter = 'pending';
+
+function setApprovalsFilter(v) {
+  _approvalsFilter = v;
+  loadApprovalsTab();
+}
+
 async function loadApprovalsTab() {
   const list = document.getElementById('approvalsList');
+  const bar  = document.getElementById('approvalsFilterBar');
   if (!list) return;
   list.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
 
-  let pending = [];
+  let rows = [];
   try {
-    const { data, error } = await db.from('task_logs')
-      .select('id, log_date, task_project, task_description, accomplishment, comments_notes, hours_spent, category, sub_category, user_id, profiles!user_id(full_name)')
-      .eq('accomplishment_status', 'pending')
+    let q = db.from('task_logs')
+      .select('id, log_date, task_project, task_description, accomplishment, accomplishment_status, rejection_reason, approved_at, comments_notes, hours_spent, category, sub_category, user_id, profiles!user_id(full_name), approver:profiles!approved_by(full_name)')
+      .not('accomplishment', 'is', null)
+      .neq('accomplishment', '')
       .order('log_date', { ascending: false });
+    if (_approvalsFilter !== 'all') q = q.eq('accomplishment_status', _approvalsFilter);
+    const { data, error } = await q;
     if (error) throw error;
-    pending = data || [];
+    rows = data || [];
   } catch (e) {
     list.innerHTML = '<div style="padding:14px;background:var(--bg-surface);border:1px dashed var(--border);border-radius:var(--radius-lg);font-size:12px;color:var(--text-3);">📦 Run the <code>2026-04-25_assigned-links-and-accomplishment-approval.sql</code> migration in Supabase to enable accomplishment approvals.</div>';
+    if (bar) bar.innerHTML = '';
     return;
   }
 
   refreshApprovalsCountBadge();
 
-  if (!pending.length) {
-    list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-3);font-size:13px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);">🎉 No pending accomplishments. All caught up.</div>';
+  // Render the filter chip row (with live counts pulled from the same
+  // query semantics, but counted client-side from a single fetch when
+  // the filter is 'all'; otherwise we trust the count to show the
+  // current bucket plus the badge total for pending).
+  if (bar) {
+    const meta = [
+      { key: 'pending',  label: '🕒 Pending',  color: 'var(--warning)' },
+      { key: 'approved', label: '✓ Approved',  color: 'var(--success)' },
+      { key: 'rejected', label: '⛔ Rejected', color: 'var(--p-urgent)' },
+      { key: 'all',      label: '📋 All',      color: 'var(--text-2)' },
+    ];
+    bar.innerHTML = meta.map(m => {
+      const active = _approvalsFilter === m.key;
+      return `<button type="button" onclick="setApprovalsFilter('${m.key}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600;cursor:pointer;transition:.15s;border:1px solid ${active ? m.color : 'var(--border)'};background:${active ? m.color + '22' : 'transparent'};color:${active ? m.color : 'var(--text-2)'};">${m.label}</button>`;
+    }).join('');
+  }
+
+  if (!rows.length) {
+    const emptyMsg = _approvalsFilter === 'pending'
+      ? '🎉 No pending accomplishments. All caught up.'
+      : _approvalsFilter === 'approved'
+      ? 'No approved accomplishments yet.'
+      : _approvalsFilter === 'rejected'
+      ? 'No rejected accomplishments yet.'
+      : 'No accomplishments to display.';
+    list.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3);font-size:13px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);">${emptyMsg}</div>`;
     return;
   }
 
-  list.innerHTML = pending.map(l => {
+  list.innerHTML = rows.map(l => {
     const name = l.profiles?.full_name || '—';
     const isOpen = _expandedApprovalIds.has(l.id);
-    const hasExtra = (l.task_description && l.task_description.trim()) || (l.comments_notes && l.comments_notes.trim());
+    const hasExtra = (l.task_description && l.task_description.trim()) || (l.comments_notes && l.comments_notes.trim()) || (l.accomplishment_status === 'rejected' && l.rejection_reason);
+    const status = l.accomplishment_status;
+    const accentColor = status === 'pending' ? 'var(--warning)' : status === 'approved' ? 'var(--success)' : status === 'rejected' ? 'var(--p-urgent)' : 'var(--border)';
+    const statusPill = status === 'pending'
+      ? '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,0.18);color:var(--warning);font-size:10px;font-weight:800;letter-spacing:.04em;">🕒 PENDING</span>'
+      : status === 'approved'
+      ? '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,0.18);color:var(--success);font-size:10px;font-weight:800;letter-spacing:.04em;">✓ APPROVED</span>'
+      : status === 'rejected'
+      ? '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,0.18);color:var(--p-urgent);font-size:10px;font-weight:800;letter-spacing:.04em;">⛔ REJECTED</span>'
+      : '';
+    const approverNote = (status === 'approved' || status === 'rejected') && l.approved_at
+      ? `<span style="font-size:11px;color:var(--text-3);">${status === 'approved' ? '✓' : '⛔'} ${l.approver?.full_name || 'admin'} · ${formatDate(l.approved_at.slice(0,10))}</span>`
+      : '';
+
+    // Action buttons — only Pending shows Approve/Reject. Approved
+    // shows a "Revert to Pending" option, Rejected shows "Re-approve".
+    let actions = '';
+    if (status === 'pending') {
+      actions = `
+        <button class="btn btn-success btn-sm" onclick="approveApproval('${l.id}')">✓ Approve</button>
+        <button class="btn btn-danger btn-sm" onclick="openRejectModal('${l.id}','${name.replace(/'/g,"\\'")}')">⛔ Reject</button>`;
+    } else if (status === 'approved') {
+      actions = `<button class="btn btn-secondary btn-sm" onclick="revertApprovalStatus('${l.id}','pending')">↺ Move to Pending</button>`;
+    } else if (status === 'rejected') {
+      actions = `
+        <button class="btn btn-success btn-sm" onclick="approveApproval('${l.id}')">✓ Approve</button>
+        <button class="btn btn-secondary btn-sm" onclick="revertApprovalStatus('${l.id}','pending')">↺ Move to Pending</button>`;
+    }
+
     return `
       <div class="card" style="padding:0;overflow:hidden;">
         <div style="padding:14px 18px;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
           <div style="flex:1;min-width:240px;cursor:${hasExtra ? 'pointer' : 'default'};" onclick="${hasExtra ? `toggleApprovalDetails('${l.id}')` : ''}">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
               <span style="font-weight:800;font-size:14px;">👤 ${name}</span>
+              ${statusPill}
               <span style="font-size:11px;color:var(--text-3);">📅 ${formatDate(l.log_date)}</span>
               <span style="font-size:11px;color:var(--text-3);">⏱️ ${safeNum(l.hours_spent, 1)}h</span>
               ${l.category ? categoryBadge(l.category) : ''}
               <span style="font-size:11px;color:var(--text-3);">📋 ${truncate(l.task_project, 50)}</span>
+              ${approverNote}
               ${hasExtra ? `<span style="font-size:11px;color:var(--text-3);margin-left:auto;">${isOpen ? '▼ Hide details' : '▶ Show details'}</span>` : ''}
             </div>
-            <div style="font-size:14px;line-height:1.4;color:var(--text-1);background:var(--bg-surface);padding:10px 12px;border-radius:var(--radius);border-left:3px solid var(--warning);">
+            <div style="font-size:14px;line-height:1.4;color:var(--text-1);background:var(--bg-surface);padding:10px 12px;border-radius:var(--radius);border-left:3px solid ${accentColor};">
               "${l.accomplishment || ''}"
             </div>
           </div>
-          <div style="display:flex;gap:6px;flex-shrink:0;">
-            <button class="btn btn-success btn-sm" onclick="approveApproval('${l.id}')">✓ Approve</button>
-            <button class="btn btn-danger btn-sm" onclick="openRejectModal('${l.id}','${name.replace(/'/g,"\\'")}')">⛔ Reject</button>
-          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">${actions}</div>
         </div>
         ${isOpen ? `
           <div style="padding:0 18px 14px;border-top:1px solid var(--border);background:rgba(0,0,0,0.02);">
+            ${status === 'rejected' && l.rejection_reason ? `
+              <div style="margin-top:12px;">
+                <div style="font-size:10px;font-weight:800;color:var(--p-urgent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">⛔ Rejection Reason</div>
+                <div style="font-size:13px;line-height:1.5;color:var(--text-2);">${l.rejection_reason}</div>
+              </div>` : ''}
             ${l.task_description && l.task_description.trim() ? `
               <div style="margin-top:12px;">
                 <div style="font-size:10px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">📝 Task Description</div>
@@ -1765,6 +1840,18 @@ async function loadApprovalsTab() {
           </div>` : ''}
       </div>`;
   }).join('');
+}
+
+async function revertApprovalStatus(id, newStatus) {
+  if (!confirm(`Move this accomplishment back to ${newStatus}?`)) return;
+  const { error } = await db.from('task_logs').update({
+    accomplishment_status: newStatus,
+    approved_by: null,
+    approved_at: null,
+    rejection_reason: newStatus === 'pending' ? null : undefined,
+  }).eq('id', id);
+  if (error) showToast('Failed: ' + error.message, 'error');
+  else { showToast('Moved to ' + newStatus, 'success'); loadApprovalsTab(); }
 }
 
 async function approveApproval(id) {
