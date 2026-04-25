@@ -530,3 +530,82 @@ A long tail of refinements after §15 shipped. No big-bang theme; the work is gr
 2. TCA → click On Hold KPI → drill-down shows hold reason in slate-bordered pill above log blocks; click Completed Late → shows ⏰ Nd late; click On Time → shows ✓ Nd early or "due day".
 3. Assign a task with a project → user logs against it → log modal pre-selects the project, employee can write comments → admin TCA drill-down shows 📝 description + 🏆 accomplishment + 💬 comments per log block.
 4. Dashboard (React app, dark): each KPI card has its own color glow; "New This Month" section shows projects created since the 1st of the current month, in serif numerals; empty state appears when nothing is in scope.
+
+---
+
+## 17. Late-April → early-May polish + reliability sweep + gold theme
+
+A long stretch of work between §16 and now. Range: `517e696` → `40f1cde`. Themes: dashboard finish-out, a real performance + error-handling pass, the bulk-upload audit, premium gold overlay (reversible), and the Employee Analysis UX rework.
+
+### Project Dashboard finish-out (React app)
+- KPI cards moved from "subtle tint with corner glow" to **bolder jewel-toned panels** — saturated gradients (~28% → 10% alpha) with stronger inner highlight + tinted outer shadow. Each tint matches semantic role (indigo / emerald / rose / sky / amber).
+- KPI typography: value scaled to 32px with tinted text-shadow that picks up the panel's `--kpi-color` var. Label dropped to 10px tracked caps in the accent color.
+- Chart card titles redesigned as tracked-caps section labels in the accent color with a glowing dot prefix (`● STATUS BREAKDOWN`, `● PROJECTS BY OWNER`). Subtitle drops to italic Instrument Serif at 14px.
+- KPI icons relocated from a tiny dot at the top → **44px icon on the right** of the value. Icon picks up `--kpi-color` via cascading var, with a luminous drop-shadow + 6° rotate-on-hover.
+- Recharts polish: axis tick text bumped to 92% white with `font-weight:500`; tooltips switched to dark surface; bars get a subtle drop-shadow so they lift off the tinted panels.
+- **Phase chart bar fill switched from `#10b981` → `#a3e635`** (lime). Was the same emerald as the panel tint so bars vanished.
+- "Starting This Month" closer: numerals bumped from 16% → 36% white at rest with full-white hover; row hover gets a hairline brighter top border.
+- Filter `start_date` (YYYY-MM equality) instead of `created_at` so the closer shows projects *kicking off* this month, not records *added* this month. Eyebrow renamed `STARTING THIS MONTH`; trailing column shows `#project_number`.
+
+### Reliability + performance pass (5 commits, `56e87f2` → `215f8aa`)
+- **Safety net**: new React `<ErrorBoundary>` (in `src/App.jsx`, exported, wraps `<App />` from `main.jsx`). Replaces white-screen crashes with a centered "Something broke." card + Reload button. Plus global `unhandledrejection` + `error` listeners on both apps (React + tracker), throttled to once per 3s to avoid runaway-loop spam.
+- **Toast helper** in React app: `showToast(message, type)` exported from `src/App.jsx`. Self-contained fixed-position top-right with auto-dismiss, callable from anywhere including pre-mount global handlers. Modeled after the EBS tracker's `utils.js::showToast`.
+- **Bundle splitting**: main bundle dropped from **513 KB gz → ~28 KB gz** (94%). Three eager top-level imports (`recharts`, `pptxgenjs`, `xlsx`) became dynamic imports + a lazy-loaded `<DashboardCharts />` component. `vite.config.js` `manualChunks` groups react/router/lucide/supabase into stable vendor chunks. ParticleNetwork stays in its existing lazy chunk; the manualChunks rule narrowly matches `react`/`react-dom`/`scheduler` so three.js + `@react-three/*` keep landing with ParticleNetwork rather than ballooning vendor-react.
+- **Query slimming**: admin `loadAllLogs()` was `select('*')`; switched to a 19-column scoped list (the fields actually consumed by every reader). `performance.html` did the same on its per-user task_logs fetch. `switchTab('comparison')` no longer re-fetches `task_logs` on every visit — uses the in-memory `allLogs` and a new 🔄 Refresh button in the Comparison filter bar gives an explicit re-pull when admin wants the latest. `priority_tasks` cached with a 30s TTL across `computeBadgeEligibility` + `syncAllUserBadges`.
+- **CRUD error handling**: every silent write in `src/App.jsx` (project/milestone/risk save+delete, AdminTeam updateProfile, AuthProvider signOut) wrapped in try/catch with success/error toasts. UI no longer closes modals or refreshes state on failure — user retries from the same view. **Heads-up**: previously-silent failures will surface as toasts now. That's the feature working.
+- `fetchProfile` now exposes a `profileError` field through the auth context so consumers can show a "couldn't load profile — sign out and retry" banner instead of silently rendering `role: undefined`.
+- EBS tracker `logout()` wraps `db.auth.signOut()` in try/catch; on server-side failure still clears the local session (user clicked logout, give them logout) but warns via toast.
+- `loadEmailjsConfig` now captures + surfaces its error.
+- New `safeNum(x, decimals)` helper in `utils.js` — `parseFloat(x).toFixed(d)` swept across admin / dashboard / log so `NaN` no longer renders for null `hours_spent`. Fallback `'—'`.
+
+### Comparison page (Team Overview) — per-user expected hours
+The shared `wt = getWorkingDaysInfo(0, [], warRanges, appStartDate)` (empty leaves) gave every employee the same expected-hours bar. Now fetches `employee_leaves` once in parallel with the other supporting data, groups by `user_id` into `leavesByUser`, then builds a fresh `wt` per user inside both the card-render map AND the chart-build forEach. Approved leave now reduces a user's expected number — matching what their Employee Analysis page already shows.
+
+The **"Comparison" tab was renamed to "👥 Team Overview"** in the user-visible label. Internal route key (`switchTab('comparison')`, `renderComparison`, `#tab-comparison`) stays unchanged to keep all existing wiring working.
+
+### Bulk-upload audit + fixes
+After auditing every export / template / bulk-upload path against the live schema:
+- **Bulk task-log upload bypassed the approval queue.** The single-log `submitLog` correctly stamped `accomplishment_status='pending'` when accomplishment was non-empty (per §15), but the bulk-upload path used the column default ('approved'), so admin never saw those rows on the Pending Approvals tab. Fixed.
+- **Admin Records CSV export** missed `linked_project_id`, `accomplishment_status`, and `rejection_reason`. Added so the exported sheet shows project links + approval state.
+- **Edited accomplishments now re-enter the queue** — when an employee edits an old log via dashboard.html and changes the Key Accomplishment, status flips back to `'pending'` and approval stamps clear. Admin edits use the same modal but auto-approve (admin's edit IS the approval, matching admin.html's edit shortcut).
+- Project / Milestone / Risk download templates + `exportAllToExcel` audited and confirmed correct: cover every user-editable column, milestone/risk numbers are auto-assigned by the bulk handlers (`src/App.jsx:1333` + `:1352`), and exports include the `#` for both.
+
+### Employee Analysis tab — buttons, caching, theme defer
+- Picker switched from a `<select>` dropdown to a **pill button strip**. Each button shows a tiny avatar + name; active state highlighted in the brand gradient. `loadUsers()` now calls `initAnalysisTab()` so newly-created users appear and deleted ones disappear without a manual refresh. Module-scope `_analysisActiveUid` survives re-renders.
+- **Switch latency**: was 3 round-trips per click (per-user task_logs + per-user employee_leaves + war_day_ranges) plus an awaited `syncUserBadges`. Now 0 RTT in the warm case — filters in-memory `allLogs`, uses module-scope caches (`_warRangesCache`, `_leavesCache`) for the rest, fires `syncUserBadges` in the background. ~1-2s → <100ms.
+- **Theme toggle lag fix**: clicking the theme pill used to dispatch `ebs:theme-changed` synchronously, which triggered the expensive `renderComparison()` (50+ Chart.js instances rebuild) in the same task. Now the event dispatch is wrapped in `requestAnimationFrame` so the CSS theme flip paints first, charts catch up a frame later.
+
+### Smaller touch-ups
+- Hero corner watermark on the landing page: small `union-trading-logo-white.png` in the bottom-right of the animation area; subsequently swapped to a dedicated `public/hero-corner-logo.png` (1571×661 PNG with alpha) at full opacity (was 80% w/ drop-shadow as a watermark — user wanted exact original colors).
+- Settings → Tracker Config: the legacy "Category Labels" inputs (Support/Testing/Project label overrides) were dropped; carry-over from the pre-Phase-4 hardcoded model.
+- Every dropdown that listed categories (admin Records / admin Export / dashboard.html user logs / dashboard edit modal) now sources from `loadCategories()`. CRUD on categories refreshes `populateFilters()` + `setupExportSelects()` so the dropdowns stay in sync without a tab switch.
+- Badge modal icon picker: freeform `<input>` → grouped `<select>` with ~30 emojis (Awards / Stars & Sparkle / Performance / Skills & Roles / Time & Status).
+- Settings page Ramadan date: hardcoded `#d8b4fe` (pale purple) was invisible on cream in light mode. Theme-class fix — pale purple on dark, deep violet (`#6d28d9`) on light.
+- Employee Analysis working-time banner used hardcoded dark navy inline styling; switched to the existing `.wta-banner` class from style.css which already has both dark + light treatments.
+- Drill-down log blocks in the TCA modal now show `📝 task_description` alongside `🏆 accomplishment` and `💬 comments_notes` (was only the latter two).
+- Admin Records tab rows are now clickable → opens a read-only **Log Details** modal showing description + accomplishment with status + comments. Edit pencil still goes to the editable form via `event.stopPropagation`. The view modal has an `✏️ Edit` button to hand off when admin reads first.
+- Hold reason (employee-entered when putting a task on hold) now surfaces in the **TCA drill-down** for tasks in the On Hold bucket — slate-bordered pill above the log blocks, only rendered when the bucket is `on_hold` so a stale reason from a previously-held-then-resumed task doesn't leak through.
+- Comparison radar + Hours Trend lines were hardcoded `#fff` — invisible on cream in light mode. New `compChartLine()` helper returns theme-aware stroke + fill colors. Theme toggle re-runs `renderComparison()` if the tab is visible (via the `ebs:theme-changed` event hook in admin.html).
+- Comparison radar **web grid** lines: bumped from `rgba(148,163,184,0.15)` (slate at 15% — barely visible on black) to theme-aware `rgba(255,255,255,0.28)` in dark / `rgba(26,22,18,0.18)` in light.
+- TCA bucket On Hold color: amber → slate so it stays distinct from Completed Late on the stacked bar / donut / leaderboard cells.
+
+### Gold theme overlay (reversible)
+`64dd76c` adds a single self-contained "GOLD THEME OVERLAY" block at the bottom of `ebs-tracker/css/style.css` AND `src/index.css`. Both blocks scope to dark mode only (light keeps cream + brown). Touches accent vars (`--accent` etc. → gold `#E6C978/#F4DC94/#B89B5C`), card top-edge hairline gold thread, sidebar active-link gold rule, ivory titles, gold form focus, gold "Click to view →" hint on KPI cards.
+
+**Semantic colors stay untouched on purpose**: success/warning/danger/info, KPI tints (indigo/emerald/rose/sky/amber), chart category palettes (violet/rose/cyan/emerald), status pills, category badges. Meaning-bearing color isn't overridden to gold.
+
+**REVERT keyword convention**: when the user says "REVERT", `git revert 64dd76c` rolls just this commit and silver/white snaps back. The two CSS blocks are contiguous so `git revert` is clean.
+
+### Files touched (cumulative summary)
+- React app: `src/App.jsx`, `src/main.jsx`, `src/index.css`, `src/components/DashboardCharts.jsx` (new, lazy-loaded), `src/components/LandingPage.jsx`, `src/components/Editable.jsx`, `vite.config.js`
+- Tracker: `ebs-tracker/admin.html`, `dashboard.html`, `tasks.html`, `log.html`, `performance.html`, `index.html` (no changes), `js/auth.js`, `js/utils.js`, `css/style.css`
+- Assets: `public/hero-corner-logo.png` (new)
+- No schema changes in this batch.
+
+### Patterns worth remembering
+- **`showToast(msg, type)`** in `src/App.jsx` is the React-app toast helper; matches the EBS tracker's `utils.js::showToast`. Use for all CRUD success/failure feedback.
+- **`safeNum(x, decimals)`** in `utils.js` for displaying parsed numbers; returns `'—'` on NaN.
+- **`displayAccomplishment(log)`** in `utils.js` is still the single render path for an accomplishment — extends to handle pending / rejected status.
+- **Heavy deps lazy-loaded** via `loadXLSX()` / `loadPptx()` factories at the top of `src/App.jsx`. Each XLSX-using function (and `generateReport`) starts with `const XLSX = await loadXLSX()` so the chunk only ships on first use.
+- **`requestAnimationFrame` defer pattern** for events that trigger heavy synchronous work — used by `toggleTheme()` so CSS theme flip paints first, charts catch up a frame later.
+- **ErrorBoundary + global handlers** are the new safety net. Any new component that does heavy async work in render should still try/catch internally; the boundary catches what slips through.

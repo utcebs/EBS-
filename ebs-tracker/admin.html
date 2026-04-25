@@ -2250,7 +2250,14 @@ async function renderComparison() {
             legend: { display: false },
             tooltip: { callbacks: { label: (ctx) => ` ${labels[ctx.dataIndex]}: ${realVals[ctx.dataIndex]}${units[ctx.dataIndex]}` } }
           },
-          scales: { r: { min: 0, max: 100, ticks: { display: false }, grid: { color: 'rgba(148,163,184,0.15)' }, pointLabels: { color: '#94a3b8', font: { size: 10 } }, angleLines: { color: 'rgba(148,163,184,0.15)' } } }
+          scales: { r: {
+            min: 0, max: 100, ticks: { display: false },
+            // Theme-aware web grid — was rgba(148,163,184,0.15) which
+            // disappeared on the black canvas in dark mode.
+            grid:       { color: document.body.classList.contains('light-mode') ? 'rgba(26,22,18,0.18)' : 'rgba(255,255,255,0.28)' },
+            angleLines: { color: document.body.classList.contains('light-mode') ? 'rgba(26,22,18,0.18)' : 'rgba(255,255,255,0.28)' },
+            pointLabels: { color: document.body.classList.contains('light-mode') ? 'rgba(26,22,18,0.70)' : 'rgba(255,255,255,0.78)', font: { size: 10 } }
+          } }
         }
       });
     }
