@@ -2091,20 +2091,29 @@ async function renderComparison() {
   const grid = document.getElementById('compGrid');
   grid.innerHTML = '<div style="grid-column:1/-1;padding:30px;text-align:center;color:var(--text-3);font-size:13px;"><div class="spinner" style="margin:0 auto 8px;"></div>Loading dashboards…</div>';
 
-  // Fetch supporting data: war ranges (working hours), projects (name lookup),
-  // user_badges (per-user earned count). badges/user_badges tables may not yet
+  // Fetch supporting data in parallel: war ranges (working hours),
+  // projects (name lookup), user_badges (per-user earned count), and
+  // employee_leaves (per-user leave days — needed so each employee's
+  // expected-hours bar reflects their personal leave like Employee
+  // Analysis already does). badges/user_badges tables may not yet
   // exist (Phase 6) — swallow errors so the page still renders.
-  const [warRes, projRes, ubRes] = await Promise.all([
+  const [warRes, projRes, ubRes, leavesRes] = await Promise.all([
     db.from('war_day_ranges').select('start_date,end_date').order('start_date'),
     db.from('projects').select('proj_unique_id, project_name'),
     db.from('user_badges').select('user_id').then(r => r, () => ({ data: [] })),
+    db.from('employee_leaves').select('user_id, start_date, end_date'),
   ]);
   const warRanges = warRes.error ? [] : (warRes.data || []);
   const projMap = {};
   (projRes.data || []).forEach(p => { projMap[p.proj_unique_id] = p.project_name; });
   const badgeCounts = {};
   (ubRes.data || []).forEach(b => { badgeCounts[b.user_id] = (badgeCounts[b.user_id] || 0) + 1; });
-  const wt = getWorkingDaysInfo(0, [], warRanges, appStartDate);
+  // Group leaves by user_id so we can compute per-user expected hours
+  const leavesByUser = {};
+  (leavesRes.data || []).forEach(l => {
+    if (!l.user_id) return;
+    (leavesByUser[l.user_id] = leavesByUser[l.user_id] || []).push({ start_date: l.start_date, end_date: l.end_date });
+  });
 
   if (!allUsers.length) {
     grid.innerHTML = '<div style="grid-column:1/-1;padding:30px;text-align:center;color:var(--text-3);font-size:13px;">No users to compare yet.</div>';
@@ -2120,6 +2129,11 @@ async function renderComparison() {
     const logs = filtered.filter(l => l.user_id === u.id);
     const stats = calculateStats(logs);
     const ini = u.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+    // Per-user expected hours — accounts for that user's individual leaves.
+    // Matches the Employee Analysis page so the same person shows the same
+    // expected number on both views.
+    const userLeaves = leavesByUser[u.id] || [];
+    const wt = getWorkingDaysInfo(0, userLeaves, warRanges, appStartDate);
     const hoursPct = wt.expectedHours > 0 ? Math.min(Math.round((stats.totalHours / wt.expectedHours) * 100), 999) : 0;
     const projIds = [...new Set(logs.map(l => l.linked_project_id).filter(Boolean))];
     const projNames = projIds.map(pid => projMap[pid] || pid);
@@ -2197,6 +2211,9 @@ async function renderComparison() {
   allUsers.forEach(u => {
     const logs = filtered.filter(l => l.user_id === u.id);
     const stats = calculateStats(logs);
+    // Per-user expected hours (same calc as the card render block above).
+    const userLeaves = leavesByUser[u.id] || [];
+    const wt = getWorkingDaysInfo(0, userLeaves, warRanges, appStartDate);
 
     // Radar — normalize per axis using a sensible min-cap so a single low value
     // doesn't make others look perfect.
