@@ -299,6 +299,10 @@
       <input type="text" id="logTaskAccomp" class="form-control" placeholder="What did you achieve?" />
     </div>
     <div class="form-group">
+      <label class="form-label">Comments / Notes</label>
+      <textarea id="logTaskNotes" class="form-control" rows="2" placeholder="Any blockers, next steps, or additional context…"></textarea>
+    </div>
+    <div class="form-group">
       <label class="completed-check">
         <input type="checkbox" id="logTaskCompleted" />
         <span>✅ Mark this task as <strong>completed</strong></span>
@@ -861,7 +865,7 @@ function renderCompletionAnalysis() {
 
 // Drill-down: show the task list for a given bucket (and optionally employee).
 // `bucket` values: 'on_time' | 'completed_late' | 'active' | 'overdue_open' | 'on_hold' | 'all'
-function openTcaDrill(bucket, userId) {
+async function openTcaDrill(bucket, userId) {
   const tagged = _tcaCharts._tagged || [];
   let items = bucket === 'all' ? tagged : tagged.filter(t => t._bucket === bucket);
   if (userId) items = items.filter(t => t.user_id === userId);
@@ -872,59 +876,104 @@ function openTcaDrill(bucket, userId) {
   document.getElementById('tcaDrillTitle').textContent = `📋 ${title} (${items.length})`;
 
   const body = document.getElementById('tcaDrillBody');
+  document.getElementById('tcaDrillModal').classList.add('open');
   if (!items.length) {
     body.innerHTML = '<div class="empty-state" style="padding:30px;"><div class="empty-icon">📭</div><div class="empty-text">No tasks in this bucket</div></div>';
-  } else {
-    const today = new Date(); today.setHours(0,0,0,0);
-    const row = (t) => {
-      const assignee = allUsers.find(u => u.id === t.user_id)?.full_name || '—';
-      const bucketPill = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:${TCA_BUCKETS[t._bucket].color};color:#000;font-size:10px;font-weight:800;letter-spacing:.04em;">${TCA_BUCKETS[t._bucket].label}</span>`;
-      let timing = '';
-      if (t._bucket === 'completed_late') {
-        const due  = new Date(t.due_date); due.setHours(0,0,0,0);
-        const done = new Date(t.done_at); done.setHours(0,0,0,0);
-        const days = Math.floor((done - due) / 86400000);
-        timing = `<span style="color:var(--warning);font-weight:700;">⏰ ${days}d late</span>`;
-      } else if (t._bucket === 'overdue_open') {
-        const due = new Date(t.due_date); due.setHours(0,0,0,0);
-        const days = Math.floor((today - due) / 86400000);
-        timing = `<span style="color:var(--p-urgent);font-weight:700;">⚠️ ${days}d overdue</span>`;
-      } else if (t._bucket === 'on_time' && t.done_at && t.due_date) {
-        const due  = new Date(t.due_date); due.setHours(0,0,0,0);
-        const done = new Date(t.done_at); done.setHours(0,0,0,0);
-        const days = Math.floor((due - done) / 86400000);
-        timing = days >= 0 ? `<span style="color:var(--success);">✓ ${days === 0 ? 'due day' : `${days}d early`}</span>` : '';
-      }
-      return `<tr>
-        <td style="padding:10px 12px;">
-          <div style="font-weight:700;font-size:13px;">${PRIORITY_ICONS[t.priority] || ''} ${t.title}</div>
-          ${t.linked_project_id ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px;">🔗 ${t.linked_project_id}</div>` : ''}
-        </td>
-        <td style="padding:10px 12px;font-size:12px;">${assignee}</td>
-        <td style="padding:10px 12px;font-size:12px;color:var(--text-3);">${t.due_date ? formatDate(t.due_date) : '—'}</td>
-        <td style="padding:10px 12px;font-size:12px;color:var(--text-3);">${t.done_at ? formatDate(t.done_at.slice(0,10)) : '—'}</td>
-        <td style="padding:10px 12px;">${timing}</td>
-        <td style="padding:10px 12px;">${bucketPill}</td>
-      </tr>`;
-    };
-    body.innerHTML = `
-      <div class="table-wrapper" style="border:none;">
-        <table>
-          <thead>
-            <tr>
-              <th>Task</th>
-              <th>Assignee</th>
-              <th>Due</th>
-              <th>Done At</th>
-              <th>Timing</th>
-              <th>Bucket</th>
-            </tr>
-          </thead>
-          <tbody>${items.sort((a,b) => (b.done_at || b.created_at || '').localeCompare(a.done_at || a.created_at || '')).map(row).join('')}</tbody>
-        </table>
-      </div>`;
+    return;
   }
-  document.getElementById('tcaDrillModal').classList.add('open');
+  body.innerHTML = '<div class="loading" style="padding:30px;"><div class="spinner"></div> Loading…</div>';
+
+  // Fetch the work-log entries logged against these priority tasks so we
+  // can show the comments / accomplishment the employee wrote per task.
+  // priority_task_id was added in the 2026-04-26 migration; if the column
+  // doesn't exist yet, just render the table without log details.
+  const taskIds = items.map(t => t.id);
+  let logsByTask = {};
+  try {
+    const { data: logs, error } = await db.from('task_logs')
+      .select('priority_task_id, comments_notes, accomplishment, accomplishment_status, log_date, hours_spent')
+      .in('priority_task_id', taskIds);
+    if (error) throw error;
+    (logs || []).forEach(l => {
+      if (!l.priority_task_id) return;
+      (logsByTask[l.priority_task_id] = logsByTask[l.priority_task_id] || []).push(l);
+    });
+  } catch (e) {
+    // Migration not applied — silent skip; table renders without log details.
+  }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const escapeHtml = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  const row = (t) => {
+    const assignee = allUsers.find(u => u.id === t.user_id)?.full_name || '—';
+    const bucketPill = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:${TCA_BUCKETS[t._bucket].color};color:#000;font-size:10px;font-weight:800;letter-spacing:.04em;">${TCA_BUCKETS[t._bucket].label}</span>`;
+    let timing = '';
+    if (t._bucket === 'completed_late') {
+      const due  = new Date(t.due_date); due.setHours(0,0,0,0);
+      const done = new Date(t.done_at); done.setHours(0,0,0,0);
+      const days = Math.floor((done - due) / 86400000);
+      timing = `<span style="color:var(--warning);font-weight:700;">⏰ ${days}d late</span>`;
+    } else if (t._bucket === 'overdue_open') {
+      const due = new Date(t.due_date); due.setHours(0,0,0,0);
+      const days = Math.floor((today - due) / 86400000);
+      timing = `<span style="color:var(--p-urgent);font-weight:700;">⚠️ ${days}d overdue</span>`;
+    } else if (t._bucket === 'on_time' && t.done_at && t.due_date) {
+      const due  = new Date(t.due_date); due.setHours(0,0,0,0);
+      const done = new Date(t.done_at); done.setHours(0,0,0,0);
+      const days = Math.floor((due - done) / 86400000);
+      timing = days >= 0 ? `<span style="color:var(--success);">✓ ${days === 0 ? 'due day' : `${days}d early`}</span>` : '';
+    }
+
+    // Render the work-log entries that link back to this priority task,
+    // surfacing comments + accomplishment (with approval state).
+    const taskLogs = (logsByTask[t.id] || []).sort((a,b) => (b.log_date || '').localeCompare(a.log_date || ''));
+    const logBlocks = taskLogs.map(l => {
+      const accStatus = l.accomplishment_status;
+      const accText = (l.accomplishment || '').trim();
+      const accLine = accText
+        ? (accStatus === 'pending'  ? `<div style="font-size:11px;color:var(--warning);margin-top:3px;">🏆 🕒 Pending: <em>${escapeHtml(accText)}</em></div>`
+         : accStatus === 'rejected' ? `<div style="font-size:11px;color:var(--p-urgent);margin-top:3px;">🏆 ⛔ Rejected: <em>${escapeHtml(accText)}</em></div>`
+         :                            `<div style="font-size:11px;color:var(--success);margin-top:3px;">🏆 ${escapeHtml(accText)}</div>`)
+        : '';
+      const notesText = (l.comments_notes || '').trim();
+      const notesLine = notesText
+        ? `<div style="font-size:11px;color:var(--text-2);margin-top:3px;line-height:1.4;">💬 ${escapeHtml(notesText)}</div>`
+        : '';
+      const meta = `<div style="font-size:10px;color:var(--text-3);">📅 ${l.log_date ? formatDate(l.log_date) : '—'} · ⏱️ ${parseFloat(l.hours_spent||0).toFixed(1)}h</div>`;
+      if (!accLine && !notesLine) return '';
+      return `<div style="margin-top:6px;padding:6px 10px;background:var(--bg-surface);border-left:2px solid var(--border);border-radius:4px;">${meta}${accLine}${notesLine}</div>`;
+    }).join('');
+
+    return `<tr>
+      <td style="padding:10px 12px;vertical-align:top;">
+        <div style="font-weight:700;font-size:13px;">${PRIORITY_ICONS[t.priority] || ''} ${escapeHtml(t.title)}</div>
+        ${t.linked_project_id ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px;">🔗 ${escapeHtml(t.linked_project_id)}</div>` : ''}
+        ${logBlocks}
+      </td>
+      <td style="padding:10px 12px;font-size:12px;vertical-align:top;">${assignee}</td>
+      <td style="padding:10px 12px;font-size:12px;color:var(--text-3);vertical-align:top;">${t.due_date ? formatDate(t.due_date) : '—'}</td>
+      <td style="padding:10px 12px;font-size:12px;color:var(--text-3);vertical-align:top;">${t.done_at ? formatDate(t.done_at.slice(0,10)) : '—'}</td>
+      <td style="padding:10px 12px;vertical-align:top;">${timing}</td>
+      <td style="padding:10px 12px;vertical-align:top;">${bucketPill}</td>
+    </tr>`;
+  };
+  body.innerHTML = `
+    <div class="table-wrapper" style="border:none;">
+      <table>
+        <thead>
+          <tr>
+            <th>Task / Logged Comments</th>
+            <th>Assignee</th>
+            <th>Due</th>
+            <th>Done At</th>
+            <th>Timing</th>
+            <th>Bucket</th>
+          </tr>
+        </thead>
+        <tbody>${items.sort((a,b) => (b.done_at || b.created_at || '').localeCompare(a.done_at || a.created_at || '')).map(row).join('')}</tbody>
+      </table>
+    </div>`;
 }
 
 function closeTcaDrill() {
@@ -1296,6 +1345,7 @@ async function openLogModal(id, title) {
   document.getElementById('logTaskCategory').value    = '';
   document.getElementById('logTaskSubCategory').value = '';
   document.getElementById('logTaskAccomp').value      = '';
+  document.getElementById('logTaskNotes').value       = '';
   document.getElementById('logTaskCompleted').checked = false;
   document.getElementById('logTaskLinkedProject').value = '';
   document.getElementById('logTaskMonth').value       = today.month;
@@ -1410,6 +1460,7 @@ async function submitTaskLog() {
 
   // Insert task log
   const accomp = document.getElementById('logTaskAccomp').value.trim();
+  const notes  = document.getElementById('logTaskNotes').value.trim();
   const { error: logErr } = await db.from('task_logs').insert({
     user_id:          session.id,
     team_member:      session.fullName,
@@ -1422,9 +1473,14 @@ async function submitTaskLog() {
     sub_category:     document.getElementById('logTaskSubCategory').value,
     hours_spent:      hours,
     accomplishment:   accomp,
-    comments_notes:   '',
+    comments_notes:   notes,
     is_completed:     document.getElementById('logTaskCompleted').checked,
     linked_project_id: linkedProjectId,
+    // Link this work log back to the priority task it was logged against
+    // so admin views (Task Completion Analysis drill-down) can surface
+    // per-assignment comments. Falls back gracefully if the column
+    // doesn't exist yet — the column is added by the 2026-04-26 migration.
+    priority_task_id: loggingTaskId || null,
     // Non-empty accomplishment requires admin approval before counting.
     ...(accomp ? { accomplishment_status: 'pending' } : {}),
   });
