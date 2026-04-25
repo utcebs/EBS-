@@ -1981,10 +1981,13 @@ async function renderComparison() {
     const badgeCount = badgeCounts[u.id] || 0;
     const pctColor = hoursPct >= 100 ? 'var(--success)' : hoursPct >= 75 ? 'var(--gold)' : 'var(--warning)';
 
+    const avatarInner = u.avatar_url
+      ? `<img src="${u.avatar_url}" alt="${u.full_name}" onerror="this.outerHTML='${ini}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
+      : ini;
     return `
     <div class="emp-dash-card" data-user-id="${u.id}">
       <div class="emp-dash-header">
-        <div class="user-avatar" style="width:46px;height:46px;font-size:14px;flex-shrink:0;">${ini}</div>
+        <div class="user-avatar" data-user-id="${u.id}" style="width:46px;height:46px;font-size:14px;flex-shrink:0;overflow:hidden;">${avatarInner}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:800;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.full_name}</div>
           <div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;">${u.role || 'Employee'}</div>
@@ -2337,8 +2340,6 @@ async function loadEmployeeAnalysis() {
   const warRanges = warRes.data || [];
   const wt        = getWorkingDaysInfo(0, leaves, warRanges, appStartDate);
   const stats     = calculateStats(logs);
-  const level     = getUserLevel(stats.totalHours);
-  const xp        = getXPProgress(stats.totalHours);
   // Admin-defined badges, fetched + auto-synced from the live tables.
   await syncUserBadges(uid, stats);
   const { badges: activeBadges, earned: earnedSet } = await fetchUserBadges(uid);
@@ -2369,17 +2370,10 @@ async function loadEmployeeAnalysis() {
   container.innerHTML = `
     <!-- Hero -->
     <div class="perf-hero" style="margin-bottom:20px;">
-      <div class="hero-avatar ${level.class}" data-user-id="${user.id}" style="border-color:${level.color};background:linear-gradient(135deg,${level.color}33,${level.color}11);overflow:hidden;">${heroInner}</div>
+      <div class="hero-avatar" data-user-id="${user.id}" style="border-color:rgba(255,255,255,0.2);background:linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04));overflow:hidden;">${heroInner}</div>
       <div class="hero-info">
         <div class="hero-name">${user.full_name}</div>
-        <div class="hero-meta">@${user.username} · ${level.icon} ${level.name} · Lv.${level.level} · 🏅 ${earnedCount}/${badges.length} badges</div>
-        <div style="display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap;">
-          <div class="level-badge ${level.class}" style="font-size:12px;padding:5px 12px;">${level.icon} ${level.name}</div>
-          <div style="flex:1;max-width:200px;">
-            <div style="font-size:10px;color:var(--text-3);margin-bottom:3px;">XP Progress: ${xp}%</div>
-            <div class="progress-bar"><div class="progress-fill lvl-fill-${level.level}" style="width:${xp}%"></div></div>
-          </div>
-        </div>
+        <div class="hero-meta">@${user.username} · 🏅 ${earnedCount}/${badges.length} badges</div>
       </div>
     </div>
 
