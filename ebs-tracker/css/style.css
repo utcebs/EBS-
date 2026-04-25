@@ -888,3 +888,35 @@ body.light-mode .menu-toggle { background: #FFFFFF; border-color: #C8C2B4; color
   .page-title { font-size: 18px; }
   .page-header { flex-direction: column; align-items: flex-start; }
 }
+
+/* ── Mobile fixes for components added in §14 / §15 batches ──── */
+@media (max-width: 900px) {
+  /* Per-employee assigned-task dashboard (tasks.html admin view).
+     Inline minmax(360px, 1fr) caused horizontal overflow on phones. */
+  .assigned-emp-grid { display: grid; grid-template-columns: 1fr !important; gap: 12px; }
+
+  /* Task Completion Analysis charts row was 2fr 1fr. Stack on phones. */
+  .tca-charts-row { grid-template-columns: 1fr !important; }
+
+  /* View switcher (Tasks Board ↔ Task Completion Analysis pill) wraps
+     on its own line so it doesn't crowd the page header. */
+  #taskViewSwitcher > div { flex-wrap: wrap; }
+  .task-view-btn { padding: 6px 10px; font-size: 11px; }
+
+  /* Pending Approvals cards: action buttons drop to a new line below
+     the accomplishment text on narrow screens. */
+  #approvalsList .card { flex-direction: column; align-items: stretch; }
+}
+
+@media (max-width: 600px) {
+  /* Comparison cards: project chips can wrap; trend toggle on its own row */
+  .emp-dash-section .trend-toggle { width: 100%; justify-content: space-between; }
+  /* Modal fits the viewport with a bit of margin */
+  .modal { width: calc(100vw - 16px); }
+  /* Drill-down tables get the standard horizontal scroll */
+  #tcaDrillBody, #drillDownSection .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Admin user-card row: avatar + name + role + buttons stacked nicely */
+  .user-card { flex-wrap: wrap; gap: 10px; }
+  /* Badge cards in the admin Badges tab compact */
+  #badgesGrid > .card { padding: 12px; }
+}

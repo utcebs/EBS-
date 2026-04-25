@@ -211,7 +211,7 @@
 
       <!-- Per-employee dashboard grid. Each card is independent — no cross-employee ranking. -->
       <div style="font-size:11px;font-weight:800;color:var(--text-3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;">👤 Employee Dashboards</div>
-      <div id="compGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:20px;"></div>
+      <div id="compGrid"></div>
 
       <!-- Drill-down modal — opened from a category bar click -->
       <div id="drillDownSection" style="display:none;margin-top:28px;">
@@ -235,20 +235,33 @@
       /* .comp-period-btn rules live in style.css (with light-mode override).
          Don't redefine them here — duplicating with `color:#fff` made the active
          label invisible on the white gradient background in dark mode. */
-      .emp-dash-card { border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--bg-card);overflow:hidden;display:flex;flex-direction:column; }
+      #compGrid { display:grid;grid-template-columns:repeat(auto-fill,minmax(min(520px,100%),1fr));gap:20px; }
+      .emp-dash-card { border-radius:var(--radius-lg);border:1px solid var(--border);background:var(--bg-card);overflow:hidden;display:flex;flex-direction:column;min-width:0; }
       .emp-dash-header { padding:18px 18px 14px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border); }
-      .emp-dash-section { padding:14px 18px;border-bottom:1px solid var(--border); }
+      .emp-dash-section { padding:14px 18px;border-bottom:1px solid var(--border);min-width:0; }
       .emp-dash-section:last-child { border-bottom:none; }
       .emp-dash-stats { display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border); }
       .emp-dash-stat { padding:12px 8px;text-align:center;border-right:1px solid var(--border); }
       .emp-dash-stat:last-child { border-right:none; }
       .emp-dash-stat .v { font-size:18px;font-weight:800;line-height:1;color:var(--text-1); }
       .emp-dash-stat .l { font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-top:4px; }
-      .trend-toggle { display:inline-flex;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:3px;gap:2px; }
+      .emp-charts-pair { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+      .trend-toggle { display:inline-flex;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:3px;gap:2px;flex-shrink:0; }
       .trend-btn { padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;border:none;background:transparent;color:var(--text-3);cursor:pointer;transition:.15s; }
       .trend-btn.active { background:linear-gradient(135deg,var(--accent-dark),var(--accent));color:#080600; }
       .trend-btn:hover:not(.active) { color:var(--text-1); }
       body.light-mode .trend-btn.active { background:linear-gradient(135deg,#5C4128,#7A5A38);color:#FAF9F6; }
+
+      @media (max-width: 640px) {
+        .emp-dash-header { padding:14px; }
+        .emp-dash-section { padding:12px 14px; }
+        .emp-dash-stats { grid-template-columns:repeat(2,1fr); }
+        .emp-dash-stat:nth-child(2) { border-right:none; }
+        .emp-dash-stat:nth-child(-n+2) { border-bottom:1px solid var(--border); }
+        .emp-charts-pair { grid-template-columns:1fr;gap:18px; }
+        .trend-toggle { padding:2px;gap:1px; }
+        .trend-btn { padding:4px 8px;font-size:10px; }
+      }
     </style>
 
     <!-- TAB: EMPLOYEE ANALYSIS -->
@@ -2047,7 +2060,7 @@ async function renderComparison() {
       </div>
 
       <div class="emp-dash-section">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="emp-charts-pair">
           <div>
             <div style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Performance</div>
             <div style="position:relative;height:180px;"><canvas id="empRadar-${u.id}"></canvas></div>
