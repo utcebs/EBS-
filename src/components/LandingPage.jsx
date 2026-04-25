@@ -287,7 +287,7 @@ export default function LandingPage({ isAdmin }) {
           src="./hero-corner-logo.png"
           alt=""
           aria-hidden="true"
-          className="absolute right-4 bottom-4 sm:right-6 sm:bottom-6 w-32 sm:w-40 lg:w-48 h-auto opacity-80 pointer-events-none drop-shadow-[0_4px_24px_rgba(255,255,255,0.20)]"
+          className="absolute right-4 bottom-4 sm:right-6 sm:bottom-6 w-32 sm:w-40 lg:w-48 h-auto pointer-events-none"
         />
       </section>
 
