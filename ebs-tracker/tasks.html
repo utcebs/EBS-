@@ -891,7 +891,7 @@ async function openTcaDrill(bucket, userId) {
   let logsByTask = {};
   try {
     const { data: logs, error } = await db.from('task_logs')
-      .select('priority_task_id, comments_notes, accomplishment, accomplishment_status, log_date, hours_spent')
+      .select('priority_task_id, task_description, comments_notes, accomplishment, accomplishment_status, log_date, hours_spent')
       .in('priority_task_id', taskIds);
     if (error) throw error;
     (logs || []).forEach(l => {
@@ -926,9 +926,13 @@ async function openTcaDrill(bucket, userId) {
     }
 
     // Render the work-log entries that link back to this priority task,
-    // surfacing comments + accomplishment (with approval state).
+    // surfacing description + comments + accomplishment (with approval state).
     const taskLogs = (logsByTask[t.id] || []).sort((a,b) => (b.log_date || '').localeCompare(a.log_date || ''));
     const logBlocks = taskLogs.map(l => {
+      const descText = (l.task_description || '').trim();
+      const descLine = descText
+        ? `<div style="font-size:11px;color:var(--text-2);margin-top:3px;line-height:1.4;">📝 ${escapeHtml(descText)}</div>`
+        : '';
       const accStatus = l.accomplishment_status;
       const accText = (l.accomplishment || '').trim();
       const accLine = accText
@@ -941,8 +945,8 @@ async function openTcaDrill(bucket, userId) {
         ? `<div style="font-size:11px;color:var(--text-2);margin-top:3px;line-height:1.4;">💬 ${escapeHtml(notesText)}</div>`
         : '';
       const meta = `<div style="font-size:10px;color:var(--text-3);">📅 ${l.log_date ? formatDate(l.log_date) : '—'} · ⏱️ ${parseFloat(l.hours_spent||0).toFixed(1)}h</div>`;
-      if (!accLine && !notesLine) return '';
-      return `<div style="margin-top:6px;padding:6px 10px;background:var(--bg-surface);border-left:2px solid var(--border);border-radius:4px;">${meta}${accLine}${notesLine}</div>`;
+      if (!descLine && !accLine && !notesLine) return '';
+      return `<div style="margin-top:6px;padding:6px 10px;background:var(--bg-surface);border-left:2px solid var(--border);border-radius:4px;">${meta}${descLine}${accLine}${notesLine}</div>`;
     }).join('');
 
     return `<tr>
