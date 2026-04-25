@@ -329,7 +329,12 @@
               </div>
             </div>
             <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);"><span style="color:var(--text-3);">Weekends</span><strong>Fri &amp; Sat (fixed)</strong></div>
-            <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);"><span style="color:var(--text-3);">Ramadan</span><strong style="color:#d8b4fe;">Feb 18–Mar 20, 6h (fixed)</strong></div>
+            <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);"><span style="color:var(--text-3);">Ramadan</span><strong class="ramadan-value">Feb 18–Mar 20, 6h (fixed)</strong></div>
+            <style>
+              /* Ramadan value reads against both themes — pale purple on dark, deep purple on cream */
+              .ramadan-value { color:#d8b4fe; }
+              body.light-mode .ramadan-value { color:#6d28d9; }
+            </style>
             <div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius-sm);border:1px solid var(--border);"><span style="color:var(--text-3);">Normal Hours</span><strong>8h/day (fixed)</strong></div>
           </div>
         </div>
