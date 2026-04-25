@@ -925,7 +925,8 @@ function Dashboard() {
             <XAxis dataKey="name" tick={{ fontSize: 11, angle: -20, textAnchor: 'end' }} />
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
             <RTooltip />
-            <Bar dataKey="value" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32}
+            {/* Bar fill is brighter than the panel's emerald tint so it glows against the surface */}
+            <Bar dataKey="value" fill="#a3e635" radius={[6, 6, 0, 0]} barSize={32}
               onClick={(d) => drillPhase(d.name)} cursor="pointer" />
           </BarChart>
         </ResponsiveContainer>

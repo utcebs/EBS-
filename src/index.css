@@ -505,10 +505,12 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 
 /* Recharts axis tick labels and tooltip — Recharts paints them in
    #666 by default which is invisible on the dark canvas. */
-.app-dark .recharts-cartesian-axis-tick text,
-.app-dark .recharts-cartesian-axis-line { fill: rgba(255,255,255,0.78) !important; stroke: rgba(255,255,255,0.18) !important; }
+.app-dark .recharts-cartesian-axis-tick text { fill: rgba(255,255,255,0.92) !important; font-weight: 500; }
+.app-dark .recharts-cartesian-axis-line { stroke: rgba(255,255,255,0.18) !important; }
 .app-dark .recharts-cartesian-axis-tick-line { stroke: rgba(255,255,255,0.18) !important; }
-.app-dark .recharts-pie-label-text { fill: rgba(255,255,255,0.85) !important; }
+.app-dark .recharts-pie-label-text { fill: rgba(255,255,255,0.92) !important; font-weight: 500; }
+/* Bars get a subtle drop-shadow so they lift off the tinted panel */
+.app-dark .recharts-bar-rectangle path { filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35)); }
 .app-dark .recharts-default-tooltip {
   background: rgba(15,15,18,0.95) !important;
   border: 1px solid rgba(255,255,255,0.14) !important;
