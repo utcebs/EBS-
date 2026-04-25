@@ -163,7 +163,7 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 /* Borders */
 .app-dark .border-surface-50        { border-color: rgba(255,255,255,0.03) !important; }
 .app-dark .border-surface-100       { border-color: rgba(255,255,255,0.05) !important; }
-.app-dark .border-surface-200       { border-color: rgba(255,255,255,0.09) !important; }
+.app-dark .border-surface-200       { border-color: rgba(255,255,255,0.20) !important; }
 .app-dark .border-surface-700\/50   { border-color: rgba(255,255,255,0.10) !important; }
 .app-dark .divide-surface-100 > * + * { border-color: rgba(255,255,255,0.05) !important; }
 .app-dark .divide-surface-200 > * + * { border-color: rgba(255,255,255,0.09) !important; }
@@ -411,6 +411,22 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
     0 18px 48px -16px rgba(var(--kpi-color), 0.65);
   border-color: rgba(var(--kpi-color), 0.7) !important;
 }
+/* The icon on the right of each KPI card picks up the panel's accent
+   color via the cascading CSS var. Subtle drop-shadow gives it the
+   same luminous feel as the chart-card glowing dot. */
+.app-dark [data-kpi] .kpi-card-icon {
+  color: rgb(var(--kpi-color)) !important;
+  opacity: 0.78;
+  filter: drop-shadow(0 0 14px rgba(var(--kpi-color), 0.45));
+  transition: opacity .25s ease, transform .25s ease, filter .25s ease;
+}
+.app-dark [data-kpi]:hover .kpi-card-icon {
+  opacity: 1;
+  transform: scale(1.06) rotate(-3deg);
+  filter: drop-shadow(0 0 20px rgba(var(--kpi-color), 0.7));
+}
+/* Light-mode fallback when theme is toggled */
+.kpi-card-icon { color: rgb(var(--kpi-color, 99 102 241)); opacity: 0.75; }
 .app-dark [data-kpi="total"]    { --kpi-color: 129,140,248; }   /* indigo */
 .app-dark [data-kpi="onTrack"]  { --kpi-color:  52,211,153; }   /* emerald */
 .app-dark [data-kpi="atRisk"]   { --kpi-color: 251, 113,133; }  /* rose */
@@ -511,6 +527,25 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .app-dark .recharts-pie-label-text { fill: rgba(255,255,255,0.92) !important; font-weight: 500; }
 /* Bars get a subtle drop-shadow so they lift off the tinted panel */
 .app-dark .recharts-bar-rectangle path { filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35)); }
+
+/* Dashboard chrome — primary buttons (e.g. Generate MBR) and form
+   controls were nearly invisible against the black canvas. Give them
+   a soft luminous edge so the user can spot the click target. */
+.app-dark button.bg-surface-900 { border: 1px solid rgba(255,255,255,0.22); }
+.app-dark button.bg-surface-900:hover { border-color: rgba(255,255,255,0.45); }
+.app-dark select.bg-white,
+.app-dark input.bg-white {
+  border: 1px solid rgba(255,255,255,0.22) !important;
+}
+.app-dark select.bg-white:hover,
+.app-dark input.bg-white:hover {
+  border-color: rgba(255,255,255,0.40) !important;
+}
+.app-dark select.bg-white:focus,
+.app-dark input.bg-white:focus {
+  border-color: rgba(255,255,255,0.65) !important;
+  outline: none;
+}
 .app-dark .recharts-default-tooltip {
   background: rgba(15,15,18,0.95) !important;
   border: 1px solid rgba(255,255,255,0.14) !important;

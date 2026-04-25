@@ -856,17 +856,19 @@ function Dashboard() {
       </div>
     </div>
 
-    {/* Summary Cards — each gets a data-kpi tint (dark-mode aesthetic layer) */}
+    {/* Summary Cards — value on the left, big tinted icon on the right */}
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8 stagger">
-      {summaryCards.map(({ kpi, label, value, icon: Icon, color, onClick }) => (
+      {summaryCards.map(({ kpi, label, value, icon: Icon, onClick }) => (
         <div key={label} data-kpi={kpi} onClick={onClick}
-          className="bg-white rounded-2xl p-4 border border-surface-200 shadow-sm animate-fade-in hover:shadow-md hover:border-brand-200 transition-all cursor-pointer group">
-          <div className="flex items-center gap-2 mb-3">
-            <div className={`p-1.5 rounded-lg ${color} group-hover:scale-110 transition-transform`}><Icon size={14} className="text-white" /></div>
+          className="bg-white rounded-2xl p-5 border border-surface-200 shadow-sm animate-fade-in hover:shadow-md hover:border-brand-200 transition-all cursor-pointer group">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-2xl font-bold font-display text-surface-900">{value}</p>
+              <p className="text-xs text-surface-500 mt-0.5">{label}</p>
+            </div>
+            <Icon size={44} className="kpi-card-icon shrink-0" strokeWidth={1.5} />
           </div>
-          <p className="text-2xl font-bold font-display text-surface-900">{value}</p>
-          <p className="text-xs text-surface-500 mt-0.5">{label}</p>
-          <p className="text-[10px] text-brand-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">Click to view →</p>
+          <p className="text-[10px] text-brand-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">Click to view →</p>
         </div>
       ))}
     </div>
