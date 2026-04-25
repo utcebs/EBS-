@@ -758,22 +758,29 @@ async function confirmBulkUpload() {
   const btn = document.getElementById('confirmBulkBtn');
   btn.disabled = true; btn.textContent = 'Inserting…';
 
-  const records = validRows.map(r => ({
-    user_id:           session.id,
-    team_member:       session.fullName,
-    log_date:          r.date,
-    month:             getMonthName(r.date),
-    week_number:       getWeekNumber(r.date),
-    task_project:      r.task,
-    task_description:  '',
-    category:          r.category,
-    sub_category:      r.subCategory,
-    hours_spent:       r.hours,
-    accomplishment:    r.accomplishment,
-    comments_notes:    r.notes,
-    is_completed:      r.isCompleted,
-    linked_project_id: r.linkedProjectId || null,
-  }));
+  const records = validRows.map(r => {
+    const accomp = (r.accomplishment || '').trim();
+    return {
+      user_id:           session.id,
+      team_member:       session.fullName,
+      log_date:          r.date,
+      month:             getMonthName(r.date),
+      week_number:       getWeekNumber(r.date),
+      task_project:      r.task,
+      task_description:  '',
+      category:          r.category,
+      sub_category:      r.subCategory,
+      hours_spent:       r.hours,
+      accomplishment:    accomp,
+      comments_notes:    r.notes,
+      is_completed:      r.isCompleted,
+      linked_project_id: r.linkedProjectId || null,
+      // Bulk uploads must follow the same approval rule as the single-log
+      // path — a non-empty accomplishment goes to admin for approval
+      // before counting in stats / displaying publicly.
+      ...(accomp ? { accomplishment_status: 'pending' } : {}),
+    };
+  });
 
   const { error } = await db.from('task_logs').insert(records);
 

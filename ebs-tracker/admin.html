@@ -2389,11 +2389,15 @@ function mapLogForExport(l) {
   const user = allUsers.find(u => u.id === l.user_id);
   return {
     date: l.log_date, week: l.week_number, month: l.month,
-    team_member: l.team_member || user?.full_name || '', 
+    team_member: l.team_member || user?.full_name || '',
     task_project: l.task_project, description: l.task_description,
     category: l.category, sub_category: l.sub_category || '', hours_spent: l.hours_spent,
-    accomplishment: l.accomplishment, notes: l.comments_notes,
+    accomplishment: l.accomplishment,
+    accomplishment_status: l.accomplishment_status || 'approved',
+    rejection_reason: l.rejection_reason || '',
+    notes: l.comments_notes,
     is_completed: l.is_completed ? 'Yes' : 'No',
+    linked_project_id: l.linked_project_id || '',
   };
 }
 
