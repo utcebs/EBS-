@@ -6,6 +6,24 @@
 
 const SESSION_KEY = 'wt_session';
 
+// ── Global error handlers ────────────────────────────────────
+// Surface unhandled rejections + uncaught errors as toasts so they
+// stop being silent. Throttled so a runaway loop doesn't spam.
+// Safe to register here because auth.js loads on every tracker page.
+(function () {
+  let _lastErrorAt = 0;
+  function reportGlobal(label, detail) {
+    const now = Date.now();
+    if (now - _lastErrorAt < 3000) return;
+    _lastErrorAt = now;
+    console.error('[global]', label, detail);
+    // showToast lives in utils.js which loads after auth.js — guard it.
+    try { if (typeof showToast === 'function') showToast(label + ': ' + ((detail && detail.message) || detail || 'unknown error'), 'error'); } catch (e) {}
+  }
+  window.addEventListener('unhandledrejection', function (e) { reportGlobal('Unhandled rejection', e.reason); });
+  window.addEventListener('error', function (e) { reportGlobal('Runtime error', e.error || e.message); });
+})();
+
 // ── Login with email + password ───────────────────────────────
 async function login(email, password) {
   try {

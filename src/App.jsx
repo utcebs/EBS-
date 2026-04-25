@@ -18,6 +18,53 @@ import {
 import PptxGenJS from 'pptxgenjs'
 import * as XLSX from 'xlsx'
 
+// ─── Toast (lightweight, top-right, auto-dismiss) ───────────
+// Self-contained so main.jsx can call it from a global error handler
+// before any provider is mounted. Stacks queued messages.
+const _toastQueue = []
+let _toastNode = null
+function ensureToastRoot() {
+  if (_toastNode) return _toastNode
+  _toastNode = document.createElement('div')
+  _toastNode.id = 'app-toast-root'
+  _toastNode.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none;'
+  if (document.body) document.body.appendChild(_toastNode)
+  else document.addEventListener('DOMContentLoaded', () => document.body.appendChild(_toastNode))
+  return _toastNode
+}
+export function showToast(message, type = 'info') {
+  const root = ensureToastRoot()
+  if (!root || !message) return
+  const el = document.createElement('div')
+  const bg = type === 'error' ? 'rgba(239,68,68,0.95)' : type === 'success' ? 'rgba(16,185,129,0.95)' : type === 'warning' ? 'rgba(245,158,11,0.95)' : 'rgba(30,30,36,0.95)'
+  el.style.cssText = `pointer-events:auto;background:${bg};color:#fff;padding:10px 14px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;letter-spacing:.01em;box-shadow:0 8px 24px -10px rgba(0,0,0,.6);max-width:360px;line-height:1.4;backdrop-filter:blur(10px);`
+  el.textContent = String(message)
+  root.appendChild(el)
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300) }, 3000)
+}
+
+// ─── Error Boundary ─────────────────────────────────────────
+// Catches render-time errors anywhere in the React tree. Replaces the
+// previous behaviour of a white screen with no recovery option.
+export class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  componentDidCatch(error, info) { console.error('[ErrorBoundary]', error, info) }
+  render() {
+    if (!this.state.error) return this.props.children
+    const msg = (this.state.error && this.state.error.message) || 'Something went wrong'
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', background: '#000', color: '#fff', fontFamily: "'DM Sans', sans-serif" }}>
+        <div style={{ maxWidth: '480px', textAlign: 'center', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '16px', padding: '32px' }}>
+          <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: '36px', lineHeight: 1, marginBottom: '12px' }}>Something broke.</div>
+          <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.65)', marginBottom: '20px', lineHeight: 1.5, wordBreak: 'break-word' }}>{msg}</div>
+          <button onClick={() => window.location.reload()} style={{ background: '#fff', color: '#000', border: 'none', padding: '10px 22px', borderRadius: '999px', fontWeight: 600, fontSize: '13px', cursor: 'pointer', letterSpacing: '.02em' }}>Reload page</button>
+        </div>
+      </div>
+    )
+  }
+}
+
 // ─── Auth Context ───────────────────────────────────────────
 const AuthCtx = createContext(null)
 const useAuth = () => useContext(AuthCtx)
