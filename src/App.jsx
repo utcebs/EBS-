@@ -118,15 +118,21 @@ function ProjectsProvider({ children }) {
 function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [profileError, setProfileError] = useState(null)
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = async (userId) => {
-    if (!userId) { setProfile(null); return null }
+    if (!userId) { setProfile(null); setProfileError(null); return null }
     // Use supabasePublic to avoid the auth-client lock. Calling supabase.from()
     // inside an onAuthStateChange callback deadlocks because the parent auth
     // operation is still holding the internal GoTrue lock.
-    const { data } = await supabasePublic.from('profiles').select('role, full_name').eq('id', userId).maybeSingle()
-    setProfile(data)
+    const { data, error } = await supabasePublic.from('profiles').select('role, full_name').eq('id', userId).maybeSingle()
+    if (error) {
+      setProfileError(error.message || 'Failed to load profile')
+      console.error('fetchProfile error:', error)
+      return null
+    }
+    setProfile(data); setProfileError(null)
     return data
   }
 
@@ -162,11 +168,22 @@ function AuthProvider({ children }) {
     return data
   }
   const signOut = async () => {
-    await supabase.auth.signOut()
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        // The user clicked logout — give them logout. But surface the
+        // server-side failure so they know the session may still be
+        // active elsewhere.
+        showToast('Sign-out incomplete on server: ' + error.message, 'warning')
+      }
+    } catch (e) {
+      showToast('Sign-out network error — local session cleared', 'warning')
+    }
     setUser(null)
     setProfile(null)
+    setProfileError(null)
   }
-  return <AuthCtx.Provider value={{ user, loading, signIn, signOut, isAdmin: profile?.role === 'admin', profile }}>{children}</AuthCtx.Provider>
+  return <AuthCtx.Provider value={{ user, loading, signIn, signOut, isAdmin: profile?.role === 'admin', profile, profileError }}>{children}</AuthCtx.Provider>
 }
 
 // ─── Constants ──────────────────────────────────────────────
@@ -1027,12 +1044,34 @@ function ProjectTracker() {
   }), [projects, searchTerm, filterStatus, filterPriority])
 
   const handleSave = async (data) => {
-    if (editProject) { await supabase.from('projects').update(data).eq('id', editProject.id) }
-    else { const maxNum = projects.reduce((m, p) => Math.max(m, p.project_number || 0), 0); await supabase.from('projects').insert({ ...data, project_number: maxNum + 1 }) }
-    setShowForm(false); setEditProject(null); refreshProjects()
+    try {
+      if (editProject) {
+        const { error } = await supabase.from('projects').update(data).eq('id', editProject.id)
+        if (error) throw error
+        showToast('Project updated', 'success')
+      } else {
+        const maxNum = projects.reduce((m, p) => Math.max(m, p.project_number || 0), 0)
+        const { error } = await supabase.from('projects').insert({ ...data, project_number: maxNum + 1 })
+        if (error) throw error
+        showToast('Project created', 'success')
+      }
+      setShowForm(false); setEditProject(null); refreshProjects()
+    } catch (e) {
+      showToast('Save failed: ' + (e.message || e), 'error')
+      // Leave the modal open so the user can retry — don't close or refresh.
+    }
   }
   const handleDelete = async () => {
-    if (deleteTarget) { await supabase.from('projects').delete().eq('id', deleteTarget.id); setDeleteTarget(null); refreshProjects() }
+    if (!deleteTarget) return
+    try {
+      const { error } = await supabase.from('projects').delete().eq('id', deleteTarget.id)
+      if (error) throw error
+      showToast('Project deleted', 'success')
+      setDeleteTarget(null); refreshProjects()
+    } catch (e) {
+      showToast('Delete failed: ' + (e.message || e), 'error')
+      // Don't clear deleteTarget — let the user retry from the same modal.
+    }
   }
   const handleBulkUpload = async (e) => {
     const file = e.target.files?.[0]
@@ -1321,20 +1360,58 @@ function ProjectDetail() {
   }
 
   const saveMilestone = async (data) => {
-    if (editMilestone) { await supabase.from('milestones').update(data).eq('id', editMilestone.id) }
-    else { const maxNum = milestones.reduce((m, ms) => Math.max(m, ms.milestone_number || 0), 0); await supabase.from('milestones').insert({ ...data, project_id: parseInt(id), milestone_number: maxNum + 1 }) }
-    setShowMilestoneForm(false); setEditMilestone(null); fetchAll()
+    try {
+      if (editMilestone) {
+        const { error } = await supabase.from('milestones').update(data).eq('id', editMilestone.id)
+        if (error) throw error
+      } else {
+        const maxNum = milestones.reduce((m, ms) => Math.max(m, ms.milestone_number || 0), 0)
+        const { error } = await supabase.from('milestones').insert({ ...data, project_id: parseInt(id), milestone_number: maxNum + 1 })
+        if (error) throw error
+      }
+      showToast('Milestone saved', 'success')
+      setShowMilestoneForm(false); setEditMilestone(null); fetchAll()
+    } catch (e) { showToast('Save failed: ' + (e.message || e), 'error') }
   }
   const saveRisk = async (data) => {
-    if (editRisk) { await supabase.from('risks').update(data).eq('id', editRisk.id) }
-    else { const maxNum = risks.reduce((m, r) => Math.max(m, r.risk_number || 0), 0); await supabase.from('risks').insert({ ...data, project_id: parseInt(id), risk_number: maxNum + 1 }) }
-    setShowRiskForm(false); setEditRisk(null); fetchAll()
+    try {
+      if (editRisk) {
+        const { error } = await supabase.from('risks').update(data).eq('id', editRisk.id)
+        if (error) throw error
+      } else {
+        const maxNum = risks.reduce((m, r) => Math.max(m, r.risk_number || 0), 0)
+        const { error } = await supabase.from('risks').insert({ ...data, project_id: parseInt(id), risk_number: maxNum + 1 })
+        if (error) throw error
+      }
+      showToast('Risk saved', 'success')
+      setShowRiskForm(false); setEditRisk(null); fetchAll()
+    } catch (e) { showToast('Save failed: ' + (e.message || e), 'error') }
   }
-  const handleDeleteMilestone = async () => { if (deleteMilestone) { await supabase.from('milestones').delete().eq('id', deleteMilestone.id); setDeleteMilestone(null); fetchAll() } }
-  const handleDeleteRisk = async () => { if (deleteRisk) { await supabase.from('risks').delete().eq('id', deleteRisk.id); setDeleteRisk(null); fetchAll() } }
+  const handleDeleteMilestone = async () => {
+    if (!deleteMilestone) return
+    try {
+      const { error } = await supabase.from('milestones').delete().eq('id', deleteMilestone.id)
+      if (error) throw error
+      showToast('Milestone deleted', 'success')
+      setDeleteMilestone(null); fetchAll()
+    } catch (e) { showToast('Delete failed: ' + (e.message || e), 'error') }
+  }
+  const handleDeleteRisk = async () => {
+    if (!deleteRisk) return
+    try {
+      const { error } = await supabase.from('risks').delete().eq('id', deleteRisk.id)
+      if (error) throw error
+      showToast('Risk deleted', 'success')
+      setDeleteRisk(null); fetchAll()
+    } catch (e) { showToast('Delete failed: ' + (e.message || e), 'error') }
+  }
   const saveProject = async (data) => {
-    await supabase.from('projects').update(data).eq('id', project.id)
-    setShowEditProject(false); fetchAll()
+    try {
+      const { error } = await supabase.from('projects').update(data).eq('id', project.id)
+      if (error) throw error
+      showToast('Project updated', 'success')
+      setShowEditProject(false); fetchAll()
+    } catch (e) { showToast('Save failed: ' + (e.message || e), 'error') }
   }
 
   if (loading) return <Spinner />
@@ -2070,12 +2147,14 @@ function AdminTeamPage() {
     try {
       // If setting is_team_lead=true, clear it on all others first
       if (patch.is_team_lead === true) {
-        await supabase.from('profiles').update({ is_team_lead: false }).neq('id', id)
+        const { error: clearErr } = await supabase.from('profiles').update({ is_team_lead: false }).neq('id', id)
+        if (clearErr) throw clearErr
       }
       const { error } = await supabase.from('profiles').update(patch).eq('id', id)
       if (error) throw error
       setProfiles(ps => ps.map(p => p.id === id ? { ...p, ...patch, ...(patch.is_team_lead ? { } : {}) } : (patch.is_team_lead ? { ...p, is_team_lead: false } : p)))
-    } catch (e) { alert('Save failed: ' + e.message) }
+      showToast('Profile updated', 'success')
+    } catch (e) { showToast('Save failed: ' + (e.message || e), 'error') }
     finally { setSavingId(null) }
   }
 
