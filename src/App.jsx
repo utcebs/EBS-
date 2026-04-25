@@ -821,13 +821,14 @@ function Dashboard() {
     { kpi: 'onHold',    label: 'On Hold',            value: onHold,    icon: Pause,           color: 'bg-slate-400',    onClick: () => drillStatus('On Hold') },
   ]
 
-  // Projects added this month — feeds the editorial closer at the bottom
+  // Projects starting this month (project_start_date in YYYY-MM format).
+  // Feeds the editorial closer at the bottom.
   const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const monthName = now.toLocaleDateString('en-US', { month: 'long' })
+  const yearMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   const newThisMonth = projects
-    .filter(p => p.created_at && new Date(p.created_at) >= monthStart)
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .filter(p => p.start_date === yearMonthKey)
+    .sort((a, b) => (a.project_number || 0) - (b.project_number || 0))
 
   // Clickable pie chart handler
   const onPieClick = (data, type) => {
@@ -963,13 +964,13 @@ function Dashboard() {
       </div>
     </div>
 
-    {/* Editorial closer — projects added this month */}
+    {/* Editorial closer — projects whose start_date is the current month */}
     <section className="dash-month-section">
-      <div className="dash-month-eyebrow">New This Month</div>
+      <div className="dash-month-eyebrow">Starting This Month</div>
       <h2 className="dash-month-title">{monthName}<span className="yr">'{String(now.getFullYear()).slice(2)}</span></h2>
-      <p className="dash-month-sub">{newThisMonth.length} {newThisMonth.length === 1 ? 'project' : 'projects'} created since {monthStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.</p>
+      <p className="dash-month-sub">{newThisMonth.length} {newThisMonth.length === 1 ? 'project kicks off' : 'projects kick off'} this month.</p>
       {newThisMonth.length === 0 ? (
-        <div className="dash-month-empty">A quiet stretch — no new projects yet this month.</div>
+        <div className="dash-month-empty">A quiet stretch — no projects starting this month.</div>
       ) : (
         <div className="dash-month-list">
           {newThisMonth.map((p, i) => (
@@ -980,7 +981,7 @@ function Dashboard() {
                 <div className="dash-month-meta">{p.business_owner || 'Unassigned'} · {p.phase || '—'}</div>
               </div>
               <StatusBadge status={p.status} />
-              <div className="dash-month-date">{new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+              <div className="dash-month-date">#{p.project_number || '—'}</div>
             </div>
           ))}
         </div>

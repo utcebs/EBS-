@@ -459,3 +459,74 @@ A second pass after §14 shipped, mostly tightening what landed plus three new f
 - `displayAccomplishment(log)` is the single source of truth for "what to render"; whenever a new surface displays an accomplishment, route it through this helper so the pending/rejected behaviour stays consistent.
 - Admin edit (Records tab) bypasses the approval queue — saving the row sets `accomplishment_status='approved'` since the admin doing the edit *is* the approval. Reasonable shortcut; document it here in case the policy ever changes.
 - **PostgREST 300 Multiple Choices on embedded resources** — adding `approved_by UUID REFERENCES profiles(id)` gave `task_logs` two FKs to `profiles` (the existing `user_id` plus the new `approved_by`). Every old `select('*, profiles(full_name)')` started returning HTTP 300 because the embed was now ambiguous. Caught quickly via Network tab (status `300 fetch (disk cache)`). Fixed by switching every affected query to the column-hint syntax `profiles!user_id(full_name)`. **Lesson**: any migration that adds a second FK from table A to table B will break every existing PostgREST embed of B from A. Audit `select('*, B(...)')` calls before merging the migration and disambiguate them in the same commit.
+
+---
+
+## 16. April 25–26 — polish pass (mobile, TCA, dashboards, photos, theme)
+
+A long tail of refinements after §15 shipped. No big-bang theme; the work is grouped here by area rather than by commit. Range: `91b6256` → `8b50463`.
+
+### Schema additions
+- **2026-04-26**: `task_logs.priority_task_id UUID REFERENCES priority_tasks(id) ON DELETE SET NULL` + a partial index on the non-null rows. Includes a best-effort backfill matching by `(user_id, task_project == priority_tasks.title)` for assigned tasks. The submitTaskLog INSERT in tasks.html now stamps this FK; admin views (TCA drill-down, etc.) can fetch the matching task_logs to show comments/description/accomplishment per priority task.
+
+### Task Completion Analysis (admin-only sub-tab on tasks.html)
+- New view-switcher pill on the My Tasks page lets admin toggle between **Tasks Board** and **Task Completion Analysis**. Non-admins don't see the switcher.
+- **5-bucket model** (replaced the original 4-bucket), each clickable for drill-down: `on_time`, `completed_late`, `active`, `overdue_open`, `on_hold`. KPI strip shows Total Assigned + the five buckets + an On-Time Rate %.
+- Bucketing logic: closed (status=done|logged) split by `done_at` vs `due_date`; open tasks split by `on_hold` / past-due / not-yet-due. Implemented in `tcaBucket()` in tasks.html.
+- **Color note**: On Hold uses slate (`#94a3b8`) so it stays visually distinct from Completed Late's amber on the stacked bar / donut / leaderboard cells / drill-down pills.
+- **Drill-down modal** opens from any visual click (KPI card, stacked-bar segment, donut slice, leaderboard cell, leaderboard row name). Each task row in the drill-down shows the title + linked project + log blocks underneath. Each log block surfaces three lines (whichever are filled): 📝 task_description, 🏆 accomplishment with status pill, 💬 comments_notes — plus log date + hours. For On Hold tasks, a 🚧 pill above the log blocks shows `priority_tasks.hold_reason` + `hold_set_at`.
+- Tasks per Employee + Status Donut + Leaderboard table + drill-down all share the `_tcaCharts._tagged` cache so re-renders stay cheap.
+
+### My Tasks page polish
+- **Always-on analytics card** for admin (was hidden behind status filter). Includes `Active · On Track` KPI alongside Total / On Time / Late / Overdue · Open.
+- **`activeUserId` defaults to `'all'` for admins** (was `session.id` — caused KPI cards to show 0 because the pool filtered to "tasks assigned TO admin").
+- **Per-employee assigned-task dashboard** — collapsible card per employee with avatar + counts (assigned / done / overdue / active) + expandable list of their tasks grouped by Overdue → Active → Closed.
+- **`✓ Done` button removed** from task cards — completion now only flows through Move-to-Log when "completed" is ticked.
+- **Project link on Assign-to-User modal** (optional dropdown). When the user opens Move-to-Log on that task, the project is pre-selected.
+- **Comments/Notes textarea on Move-to-Log modal** (was hardcoded empty in the INSERT).
+
+### Approval workflow surfacing
+- **🏆 Approved Achievements** card on `performance.html` and admin `Employee Analysis` — scrollable list of approved-only accomplishments newest-first.
+- **Admin Records tab rows are clickable** → opens a read-only view modal showing description + accomplishment (with status pill) + comments. Edit pencil still goes straight to the editable form via `event.stopPropagation`. The view modal has an "✏️ Edit" button to hand off when admin reads first then decides to fix.
+- **User-detail logs table** (admin Users → View) is also clickable to the same view modal.
+
+### Avatars & photos
+- **Comparison page** per-employee dashboard cards now render the user's `avatar_url` (data was already loaded; renderer was emitting initials only).
+- **React app ProjectDetail "Hours Logged by Employee"** — `task_logs` query now joins `profiles!user_id(...)` and groups contributors by `user_id` (with `team_member` string fallback for legacy rows). Each card shows the avatar with initials fallback.
+- **EBS tracker admin All Users + User Detail header** — initials replaced with `<img src=avatar_url>` (with initials onerror fallback).
+- **PWA / home-screen icons match favicon** — copied `favicon.png` over `apple-touch-icon.png`, `icon-192.png`, `icon-512.png` (and the `-light` variants in ebs-tracker). Was bothering when "save to home screen" used the old Ü mark while the tab favicon was the new Uj.
+
+### Theme & visual polish
+- **Comparison radar + Hours Trend lines visible in light mode** — were hardcoded `borderColor:'#fff'` (invisible on cream). Added `compChartLine()` helper that returns theme-aware stroke + fill colors. New `ebs:theme-changed` DOM event fired from `utils.js::toggleTheme` — admin.html listens for it and re-runs `renderComparison()` if visible so charts repaint without manual refresh.
+- **Comparison period button dark-mode invisible-text bug** — removed the duplicate `.comp-period-btn.active` rule from the inline `<style>` in admin.html (it was overriding style.css with `color:#fff` on a white-gradient background = invisible).
+- **Light-mode default classes deleted from Settings → Tracker Config** ("Category Labels" Support/Testing/Project inputs were leftovers from the pre-Phase-4 hardcoded model).
+- **Dynamic category filters everywhere** — admin Records, admin Export, dashboard.html user logs filter, dashboard edit-modal category picker — all source from `loadCategories()` instead of hardcoded `['Support','Testing','Project']`. CRUD on categories/subcategories now refreshes `populateFilters()` + `setupExportSelects()` so the dropdowns stay in sync without a tab switch.
+- **Badge icon picker dropdown** — `<select>` grouped into Awards / Stars & Sparkle / Performance / Skills & Roles / Time & Status (~30 emojis) replacing the freeform emoji input.
+- **Employee Analysis hero** — dropped the Lv./XP/progress-bar leftovers; now just avatar + name + @username + badge count, matching the §14 anti-leaderboard direction.
+
+### Project Dashboard redesign (React app)
+- Each KPI card carries its own color identity via `data-kpi="..."` → CSS in `src/index.css` applies a tinted radial glow + 1px gradient strip + tinted border + tinted hover shadow. Five tints map to semantics: indigo (total), emerald (on track), rose (at risk), sky (completed), amber (on hold).
+- Each chart panel gets a `data-accent="..."` → 2px top strip + corner glow. status=violet, priority=rose, owner=cyan, phase=emerald.
+- **Editorial "Starting This Month" closer** at the bottom: Instrument Serif headline (`clamp(48px,8vw,92px)`) shows the month name + italic 2-digit year, followed by a numbered list of projects whose `start_date` (stored as `YYYY-MM`) matches the current month — i.e. *kicking off this month*, not *created in the system this month*. Big ghost serif numerals (`01`, `02`...) ramp from 16% → 55% opacity on hover. The trailing column shows the project number (`#42`). Empty state: italic Instrument Serif "*A quiet stretch*". Mobile collapses cleanly.
+- Imported Instrument Serif via Google Fonts (~14 KB) for the closer's headline + numerals + empty state.
+
+### Mobile responsiveness pass
+- `#compGrid` minmax changed from `520px,1fr` to `min(520px,100%),1fr` so cards shrink on phones.
+- Inner radar+category 1fr 1fr grid → `.emp-charts-pair`; stacks to 1 col under 640px.
+- TCA charts row 2fr 1fr → `.tca-charts-row`; stacks under 900px.
+- Per-employee assigned-task dashboard grid → `.assigned-emp-grid`; 1fr under 900px (was `360px,1fr` minmax = horizontal scroll on 320–360px viewports).
+- View switcher pill wraps on its own line on phones; buttons compact.
+- Pending Approvals card actions drop below text on narrow screens.
+- Drill-down tables get `overflow-x:auto`. Modals constrain to `100vw - 16px`.
+- Admin user-card and badge cards compact on <600px.
+
+### Files touched (summary)
+- React: `src/App.jsx` (Dashboard tinted cards + editorial closer; ProjectDetail avatars), `src/index.css` (KPI/chart accents, dash-month-* layer, Instrument Serif import)
+- Tracker: `ebs-tracker/admin.html`, `tasks.html`, `dashboard.html`, `performance.html`, `log.html`, `js/utils.js`, `css/style.css`
+- Schema: `supabase/migrations/2026-04-26_task-log-priority-link.sql`
+
+### Verification additions (run after migrations applied)
+1. Mobile: phone viewport renders Comparison cards, TCA charts row, per-employee dashboard, and view switcher all without horizontal scroll.
+2. TCA → click On Hold KPI → drill-down shows hold reason in slate-bordered pill above log blocks; click Completed Late → shows ⏰ Nd late; click On Time → shows ✓ Nd early or "due day".
+3. Assign a task with a project → user logs against it → log modal pre-selects the project, employee can write comments → admin TCA drill-down shows 📝 description + 🏆 accomplishment + 💬 comments per log block.
+4. Dashboard (React app, dark): each KPI card has its own color glow; "New This Month" section shows projects created since the 1st of the current month, in serif numerals; empty state appears when nothing is in scope.
