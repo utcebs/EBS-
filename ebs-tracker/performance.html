@@ -141,9 +141,14 @@ async function init() {
 }
 
 async function loadPerformance() {
-  // Load logs + global war days setting in parallel
+  // Load logs + global war days setting in parallel.
+  // Column list scoped (was select('*')) — these are the fields the
+  // performance page consumes (calculateStats, charts, badges, achievements).
   const [logsRes, leavesRes, warRangesRes, startDateRes] = await Promise.all([
-    db.from('task_logs').select('*').eq('user_id', session.id).order('log_date', { ascending: true }),
+    db.from('task_logs')
+      .select('id, log_date, month, week_number, task_project, hours_spent, category, sub_category, accomplishment, accomplishment_status, rejection_reason, is_completed')
+      .eq('user_id', session.id)
+      .order('log_date', { ascending: true }),
     db.from('employee_leaves').select('start_date,end_date').eq('user_id', session.id),
     db.from('war_day_ranges').select('start_date,end_date').order('start_date'),
     db.from('app_settings').select('value').eq('key','tracker_start_date').maybeSingle(),

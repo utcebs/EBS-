@@ -205,6 +205,7 @@
         </select>
         <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
           <span id="compPeriodLabel" style="font-size:12px;color:var(--text-3);font-weight:500;"></span>
+          <button class="btn btn-secondary btn-sm" onclick="loadAllLogs().then(renderComparison)" title="Reload from database">🔄 Refresh</button>
           <button class="btn btn-success btn-sm" onclick="exportAllCSV()">📤 Export</button>
         </div>
       </div>
@@ -831,7 +832,13 @@ async function loadAllLogs() {
   // Disambiguate the profiles join — task_logs has two FKs to profiles
   // (user_id and approved_by from the 2026-04-25 migration). Using the
   // column-name hint picks the user_id relationship.
-  const { data } = await db.from('task_logs').select('*, profiles!user_id(full_name)').order('log_date', { ascending: false });
+  // Scoped column list (was select('*')) to cut wire payload ~40-60% per
+  // call — these are the fields actually consumed by Records, Comparison,
+  // Employee Analysis, Approvals drill-downs, and Project Analytics.
+  const { data, error } = await db.from('task_logs')
+    .select('id, user_id, team_member, log_date, month, week_number, task_project, task_description, hours_spent, category, sub_category, accomplishment, accomplishment_status, rejection_reason, comments_notes, is_completed, linked_project_id, priority_task_id, profiles!user_id(full_name)')
+    .order('log_date', { ascending: false });
+  if (error) console.error('loadAllLogs error:', error);
   allLogs = data || [];
 }
 
@@ -846,8 +853,12 @@ function switchTab(name) {
   if (name === 'settings')          loadSettingsTab();
   if (name === 'project-analytics') loadProjectAnalytics();
   if (name === 'comparison') {
-    // Reload logs to get latest is_completed values
-    loadAllLogs().then(() => renderComparison());
+    // Skip the refetch — the data was loaded on admin init (and is
+    // refreshed after every CRUD op via the existing loadAllLogs() calls
+    // in handleAdmin*/approval/category handlers). Use the in-memory
+    // copy. If the user wants the absolute latest, the 🔄 Refresh button
+    // in the Comparison filter bar still calls loadAllLogs explicitly.
+    renderComparison();
   }
   if (name === 'analysis')   initAnalysisTab();
   if (name === 'export')     initExportTab();
@@ -1844,15 +1855,30 @@ function badgeConditionLabel(b) {
   }
 }
 
+// Tiny TTL cache for the assigned-tasks fetch — both
+// computeBadgeEligibility + syncAllUserBadges hit this query and used
+// to fire it twice back-to-back when the admin clicked Sync.
+let _assignedTasksCache = { data: null, ts: 0 };
+async function getAssignedTasksCached(maxAgeMs = 30000) {
+  if (_assignedTasksCache.data && Date.now() - _assignedTasksCache.ts < maxAgeMs) {
+    return _assignedTasksCache.data;
+  }
+  const { data, error } = await db.from('priority_tasks')
+    .select('user_id, status, due_date, done_at')
+    .not('assigned_by', 'is', null);
+  if (error) { console.error('priority_tasks fetch error:', error); return []; }
+  _assignedTasksCache = { data: data || [], ts: Date.now() };
+  return _assignedTasksCache.data;
+}
+
 async function computeBadgeEligibility(badges) {
   const counts = {};
   if (!badges.length || !allUsers.length) return counts;
-  // We already have allLogs in scope (loaded by loadAllLogs at admin init)
-  // and priority_tasks may need a separate fetch for on_time_rate.
+  // allLogs is already in scope (loaded by loadAllLogs at admin init).
+  // priority_tasks needed only when an on_time_rate badge exists.
   let assignedTasks = [];
   if (badges.some(b => b.condition_type === 'on_time_rate')) {
-    const { data } = await db.from('priority_tasks').select('user_id, status, due_date, done_at').not('assigned_by', 'is', null);
-    assignedTasks = data || [];
+    assignedTasks = await getAssignedTasksCached();
   }
   allUsers.forEach(u => {
     const userLogs = allLogs.filter(l => l.user_id === u.id);
@@ -1866,14 +1892,19 @@ async function computeBadgeEligibility(badges) {
 }
 
 async function syncAllUserBadges() {
-  const { data: badges } = await db.from('badges').select('*').eq('is_active', true);
+  const { data: badges, error: bErr } = await db.from('badges').select('*').eq('is_active', true);
+  if (bErr) { showToast('Sync failed: ' + bErr.message, 'error'); return; }
   if (!badges) return;
-  const { data: assignedTasks } = await db.from('priority_tasks').select('user_id, status, due_date, done_at').not('assigned_by', 'is', null);
+  // Force a fresh assignedTasks fetch right before sync (TTL is short
+  // but admin may have just changed something). Bypass cache by clearing
+  // the timestamp.
+  _assignedTasksCache.ts = 0;
+  const assignedTasks = await getAssignedTasksCached();
   const inserts = [];
   allUsers.forEach(u => {
     const userLogs = allLogs.filter(l => l.user_id === u.id);
     const stats = calculateStats(userLogs);
-    const ctx = { tasks: (assignedTasks || []).filter(t => t.user_id === u.id), logs: userLogs };
+    const ctx = { tasks: assignedTasks.filter(t => t.user_id === u.id), logs: userLogs };
     badges.forEach(b => {
       if (evaluateBadge(b, stats, ctx)) inserts.push({ user_id: u.id, badge_id: b.id });
     });
