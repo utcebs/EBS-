@@ -99,7 +99,7 @@
           <div class="form-group">
             <label class="form-label">Employee Role(s)</label>
             <div class="chip-input" id="newEmployeeRolesChips">
-              <input type="text" id="newEmployeeRolesInput" placeholder="Type a role and press Enter…" autocomplete="off" />
+              <input type="text" id="newEmployeeRolesInput" data-chip-state="newEmployeeRoles" placeholder="Type a role and press Enter…" autocomplete="off" />
             </div>
             <div class="form-hint">Free-form job titles — Software Developer, Project Manager, etc. Multiple allowed.</div>
           </div>
@@ -767,7 +767,7 @@
     <div class="form-group">
       <label class="form-label">Employee Role(s)</label>
       <div class="chip-input" id="editEmployeeRolesChips">
-        <input type="text" id="editEmployeeRolesInput" placeholder="Type a role and press Enter…" autocomplete="off" />
+        <input type="text" id="editEmployeeRolesInput" data-chip-state="editEmployeeRoles" placeholder="Type a role and press Enter…" autocomplete="off" />
       </div>
     </div>
 
@@ -1311,27 +1311,45 @@ function chipRender(stateKey, hostId, inputId) {
   });
 }
 
-function chipBindInput(stateKey, hostId, inputId) {
-  const input = document.getElementById(inputId);
-  if (!input || input.dataset.bound === '1') return;
-  input.dataset.bound = '1';
-  input.addEventListener('keydown', (e) => {
+// Single document-level delegation listener — one bind, works for
+// every chip input (including ones that mount later like the edit
+// modal). Beats per-input binding because there's no init timing
+// to get wrong. Inputs declare themselves via data-chip-state.
+(function bootstrapChipDelegation() {
+  if (window._chipDelegationBound) return;
+  window._chipDelegationBound = true;
+
+  document.addEventListener('keydown', (e) => {
+    const input = e.target;
+    if (!input || !input.matches || !input.matches('.chip-input input[type="text"]')) return;
+    const host = input.parentElement;
+    const stateKey = input.dataset.chipState;
+    if (!stateKey || !_chipState[stateKey]) return;
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
       const v = input.value.trim().replace(/,$/, '');
       if (!v) return;
       if (!_chipState[stateKey].includes(v)) _chipState[stateKey].push(v);
       input.value = '';
-      chipRender(stateKey, hostId, inputId);
+      chipRender(stateKey, host.id, input.id);
     } else if (e.key === 'Backspace' && !input.value && _chipState[stateKey].length) {
       _chipState[stateKey].pop();
-      chipRender(stateKey, hostId, inputId);
+      chipRender(stateKey, host.id, input.id);
     }
   });
-  // Click anywhere on the wrapper focuses the input — common chip pattern
-  const host = document.getElementById(hostId);
-  if (host) host.addEventListener('click', () => input.focus());
-}
+
+  // Click anywhere on a chip-input wrapper focuses its inner input.
+  document.addEventListener('click', (e) => {
+    const host = e.target.closest && e.target.closest('.chip-input');
+    if (!host || e.target.tagName === 'INPUT' || e.target.classList.contains('x')) return;
+    const input = host.querySelector('input[type="text"]');
+    if (input) input.focus();
+  });
+})();
+
+// Legacy no-op shim — kept so any old call sites don't error.
+// Real wiring lives in the delegation block above.
+function chipBindInput(stateKey, hostId, inputId) { /* no-op: delegation handles it */ }
 
 function chipReset(stateKey, hostId, inputId, initial = []) {
   _chipState[stateKey] = Array.isArray(initial) ? [...initial] : [];
