@@ -1083,12 +1083,15 @@ body:not(.light-mode) .sidebar-user { border-bottom: 1px solid rgba(212,184,123,
 body:not(.light-mode) .sidebar-xp { border-bottom: 1px solid rgba(212,184,123,0.12) !important; }
 body:not(.light-mode) .sidebar-footer { border-top: 1px solid rgba(212,184,123,0.12) !important; }
 
-/* Brand wordmark — Playfair gradient, slightly tighter feel */
+/* Brand wordmark — solid champagne. Explicitly clears the inherited
+   background gradient + clip-to-text so the span never paints a gold
+   rectangle behind the letters in any browser. */
 body:not(.light-mode) .logo-text {
-  background: linear-gradient(180deg, #ffffff 0%, #e6cf94 60%, #caa15a 100%) !important;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  background: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  -webkit-text-fill-color: #e6cf94 !important;
+  color: #e6cf94 !important;
   letter-spacing: 0.015em;
 }
 
