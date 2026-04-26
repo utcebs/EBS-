@@ -906,6 +906,10 @@ async function init() {
   renderComparison();
   setupExportSelects();
   refreshApprovalsCountBadge();
+  // Bind the Create User form's Employee Roles chip input now so admin
+  // can type roles + press Enter without first clicking Create User.
+  // (chipBindInput is idempotent via dataset.bound — safe to call.)
+  chipBindInput('newEmployeeRoles', 'newEmployeeRolesChips', 'newEmployeeRolesInput');
 }
 
 async function loadUsers() {
