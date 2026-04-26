@@ -245,8 +245,8 @@ const PRI_PIE_COLORS = ['#ef4444', '#f97316', '#38bdf8', '#94a3b8']
 function PageLogo() {
   return (
     <div className="mb-3">
-      <img src="./ebs-logo.png" alt="EBS" className="page-logo-light h-10 w-auto object-contain" />
-      <img src="./ebs-logo-white.png" alt="EBS" className="page-logo-dark h-10 w-auto object-contain" />
+      <img src="./ebs-logo.png" alt="EBS" className="page-logo-light h-20 w-auto object-contain" />
+      <img src="./ebs-logo-white.png" alt="EBS" className="page-logo-dark h-20 w-auto object-contain" />
     </div>
   )
 }
