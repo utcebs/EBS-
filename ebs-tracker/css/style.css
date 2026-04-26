@@ -921,6 +921,46 @@ body.light-mode .menu-toggle { background: #FFFFFF; border-color: #C8C2B4; color
   #badgesGrid > .card { padding: 12px; }
 }
 
+/* ── Chip input (used for employee_roles in admin Users) ─────── */
+.chip-input {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 40px;
+  cursor: text;
+  transition: border-color .15s ease;
+}
+.chip-input:focus-within { border-color: rgba(230,201,120,0.55); }
+.chip-input input {
+  flex: 1; min-width: 120px;
+  border: none; outline: none; background: transparent;
+  color: var(--text-1); font-family: inherit; font-size: 13px;
+  padding: 4px 2px;
+}
+.chip-input .chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  color: var(--text-1);
+}
+.chip-input .chip .x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  color: var(--text-3); font-size: 12px; line-height: 1;
+  cursor: pointer; transition: .15s;
+}
+.chip-input .chip .x:hover { background: rgba(239,68,68,0.25); color: #fff; }
+
+body.light-mode .chip-input .chip .x { background: rgba(26,22,18,0.08); }
+body.light-mode .chip-input .chip .x:hover { background: rgba(239,68,68,0.25); color: #fff; }
+
 /* ════════════════════════════════════════════════════════════════════
    GOLD THEME OVERLAY — premium black + gold direction
    Applies to dark mode only. Light mode keeps its cream + brown palette

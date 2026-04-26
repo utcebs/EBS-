@@ -90,11 +90,18 @@
             <input type="password" id="newPassword" class="form-control" placeholder="Min. 6 characters" />
           </div>
           <div class="form-group">
-            <label class="form-label">Role</label>
+            <label class="form-label">Application Permission</label>
             <select id="newRole" class="form-control">
               <option value="user">User — log tasks, view projects</option>
               <option value="admin">Admin — full access to everything</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Employee Role(s)</label>
+            <div class="chip-input" id="newEmployeeRolesChips">
+              <input type="text" id="newEmployeeRolesInput" placeholder="Type a role and press Enter…" autocomplete="off" />
+            </div>
+            <div class="form-hint">Free-form job titles — Software Developer, Project Manager, etc. Multiple allowed.</div>
           </div>
           <div class="login-error" id="createError" style="margin-bottom:12px;"></div>
           <button class="btn btn-primary" id="createUserBtn" onclick="createUser()" style="width:100%;justify-content:center;">
@@ -710,6 +717,68 @@
   </div>
 </div>
 
+<!-- Edit User Modal (Admin) -->
+<div class="modal-backdrop" id="editUserModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h2 class="modal-title">✏️ Edit User</h2>
+      <button class="modal-close" onclick="closeEditUserModal()">✕</button>
+    </div>
+
+    <!-- Avatar — click to upload to team-photos bucket -->
+    <div class="form-group" style="display:flex;align-items:center;gap:14px;">
+      <div id="editUserAvatar" class="user-avatar" style="width:64px;height:64px;font-size:18px;border:1px solid var(--border);overflow:hidden;cursor:pointer;flex-shrink:0;" onclick="document.getElementById('editUserAvatarFile').click()" title="Click to upload"></div>
+      <input type="file" id="editUserAvatarFile" accept="image/*" style="display:none;" />
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-2);">Profile picture</div>
+        <div class="form-hint">Click the avatar to upload. Images go to the <code>team-photos</code> bucket.</div>
+        <div id="editUserAvatarStatus" style="font-size:11px;color:var(--text-3);margin-top:4px;"></div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Full Name <span class="req">*</span></label>
+      <input type="text" id="editUserFullName" class="form-control" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Username</label>
+      <input type="text" id="editUserUsername" class="form-control" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input type="email" id="editUserEmail" class="form-control" readonly style="opacity:.65;cursor:not-allowed;" />
+      <div class="form-hint">Login email — change requires admin via Supabase Auth (not editable here).</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Job Title</label>
+      <input type="text" id="editUserJobTitle" class="form-control" placeholder="e.g. Senior Engineer" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Bio</label>
+      <textarea id="editUserBio" class="form-control" rows="2" placeholder="Short bio shown on the landing page team section"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Application Permission</label>
+      <select id="editUserRole" class="form-control">
+        <option value="user">User — log tasks, view projects</option>
+        <option value="admin">Admin — full access to everything</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Employee Role(s)</label>
+      <div class="chip-input" id="editEmployeeRolesChips">
+        <input type="text" id="editEmployeeRolesInput" placeholder="Type a role and press Enter…" autocomplete="off" />
+      </div>
+    </div>
+
+    <div class="login-error" id="editUserError" style="margin-bottom:12px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+      <button class="btn btn-primary" id="editUserSaveBtn" onclick="saveUserProfile()">💾 Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- View-only Log Details Modal (Admin) -->
 <div class="modal-backdrop" id="logViewModal">
   <div class="modal" style="max-width:560px;">
@@ -840,7 +909,7 @@ async function init() {
 }
 
 async function loadUsers() {
-  const { data } = await db.from('profiles').select('id, username, full_name, role, email, avatar_url, created_at').order('full_name');
+  const { data } = await db.from('profiles').select('id, username, full_name, role, email, avatar_url, job_title, bio, employee_roles, created_at').order('full_name');
   allUsers = data || [];
   // If the Analysis tab's button strip exists, refresh it so newly-created
   // employees show up immediately and deleted ones disappear.
@@ -1216,16 +1285,74 @@ async function saveWarDays() {
   btn.disabled = false; btn.textContent = '💾 Save Setting';
 }
 
+// ── Chip input (shared by Create User + Edit User) ─────────
+// Module-scope arrays keep state independent across the two forms.
+const _chipState = { newEmployeeRoles: [], editEmployeeRoles: [] };
+
+function chipRender(stateKey, hostId, inputId) {
+  const host  = document.getElementById(hostId);
+  const input = document.getElementById(inputId);
+  if (!host || !input) return;
+  // Wipe everything except the trailing input
+  Array.from(host.querySelectorAll('.chip')).forEach(c => c.remove());
+  _chipState[stateKey].forEach((val, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${val.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}<span class="x" data-i="${i}" title="Remove">×</span>`;
+    chip.querySelector('.x').addEventListener('click', () => {
+      _chipState[stateKey].splice(i, 1);
+      chipRender(stateKey, hostId, inputId);
+    });
+    host.insertBefore(chip, input);
+  });
+}
+
+function chipBindInput(stateKey, hostId, inputId) {
+  const input = document.getElementById(inputId);
+  if (!input || input.dataset.bound === '1') return;
+  input.dataset.bound = '1';
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const v = input.value.trim().replace(/,$/, '');
+      if (!v) return;
+      if (!_chipState[stateKey].includes(v)) _chipState[stateKey].push(v);
+      input.value = '';
+      chipRender(stateKey, hostId, inputId);
+    } else if (e.key === 'Backspace' && !input.value && _chipState[stateKey].length) {
+      _chipState[stateKey].pop();
+      chipRender(stateKey, hostId, inputId);
+    }
+  });
+  // Click anywhere on the wrapper focuses the input — common chip pattern
+  const host = document.getElementById(hostId);
+  if (host) host.addEventListener('click', () => input.focus());
+}
+
+function chipReset(stateKey, hostId, inputId, initial = []) {
+  _chipState[stateKey] = Array.isArray(initial) ? [...initial] : [];
+  const input = document.getElementById(inputId);
+  if (input) input.value = '';
+  chipRender(stateKey, hostId, inputId);
+}
+
 // ── User Management ────────────────────────────────────────
 async function createUser() {
   const btn = document.getElementById('createUserBtn');
   const err = document.getElementById('createError');
   err.classList.remove('show');
 
+  // Bind once; safe to call repeatedly
+  chipBindInput('newEmployeeRoles', 'newEmployeeRolesChips', 'newEmployeeRolesInput');
+
   const fullName = document.getElementById('newFullName').value.trim();
   const email    = document.getElementById('newEmail').value.trim().toLowerCase();
   const password = document.getElementById('newPassword').value;
   const role     = document.getElementById('newRole').value;
+  // Capture any role still in the input that hasn't been chip-confirmed
+  const trailingRole = document.getElementById('newEmployeeRolesInput').value.trim();
+  if (trailingRole && !_chipState.newEmployeeRoles.includes(trailingRole)) _chipState.newEmployeeRoles.push(trailingRole);
+  const employeeRoles = [..._chipState.newEmployeeRoles];
 
   if (!fullName || !email || !password) { err.textContent = 'Full name, email and password are required'; err.classList.add('show'); return; }
   if (password.length < 6) { err.textContent = 'Password must be at least 6 characters'; err.classList.add('show'); return; }
@@ -1252,7 +1379,8 @@ async function createUser() {
       full_name: fullName,
       email,
       role,
-      username: email.split('@')[0]
+      username: email.split('@')[0],
+      employee_roles: employeeRoles,
     });
   }
 
@@ -1260,11 +1388,119 @@ async function createUser() {
   document.getElementById('newFullName').value = '';
   document.getElementById('newEmail').value    = '';
   document.getElementById('newPassword').value = '';
+  chipReset('newEmployeeRoles', 'newEmployeeRolesChips', 'newEmployeeRolesInput', []);
   await loadUsers();
   renderUserList();
   populateFilters();
   setupExportSelects();
   btn.disabled = false; btn.textContent = '⚔️ Create User';
+}
+
+// ── Edit User Modal ────────────────────────────────────────
+let _editingUserId = null;
+// Stages a freshly-uploaded avatar URL between the file-pick step and
+// the Save click. If the user uploads but cancels, we just throw it
+// away — the file stays in the bucket but the profile isn't updated.
+let _stagedAvatarUrl = null;
+
+function openEditUserModal(uid) {
+  const u = allUsers.find(x => x.id === uid);
+  if (!u) { showToast('User not found', 'error'); return; }
+  _editingUserId = uid;
+  _stagedAvatarUrl = null;
+
+  // Bind chip + file pickers once
+  chipBindInput('editEmployeeRoles', 'editEmployeeRolesChips', 'editEmployeeRolesInput');
+  const fileInput = document.getElementById('editUserAvatarFile');
+  if (fileInput && !fileInput.dataset.bound) {
+    fileInput.dataset.bound = '1';
+    fileInput.addEventListener('change', handleEditUserAvatarChange);
+  }
+
+  // Prefill
+  const ini = u.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const av  = document.getElementById('editUserAvatar');
+  av.innerHTML = u.avatar_url
+    ? `<img src="${u.avatar_url}" alt="" onerror="this.outerHTML='${ini}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
+    : ini;
+  document.getElementById('editUserFullName').value  = u.full_name || '';
+  document.getElementById('editUserUsername').value  = u.username || '';
+  document.getElementById('editUserEmail').value     = u.email || '';
+  document.getElementById('editUserJobTitle').value  = u.job_title || '';
+  document.getElementById('editUserBio').value       = u.bio || '';
+  document.getElementById('editUserRole').value      = u.role || 'user';
+  chipReset('editEmployeeRoles', 'editEmployeeRolesChips', 'editEmployeeRolesInput', u.employee_roles || []);
+  document.getElementById('editUserError').classList.remove('show');
+  document.getElementById('editUserAvatarStatus').textContent = '';
+  document.getElementById('editUserModal').classList.add('open');
+}
+
+function closeEditUserModal() {
+  document.getElementById('editUserModal').classList.remove('open');
+  _editingUserId = null;
+  _stagedAvatarUrl = null;
+}
+
+async function handleEditUserAvatarChange(e) {
+  const file = e.target.files?.[0];
+  if (!file || !_editingUserId) return;
+  const status = document.getElementById('editUserAvatarStatus');
+  const av = document.getElementById('editUserAvatar');
+  status.textContent = 'Uploading…';
+  try {
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+    const path = `${_editingUserId}/${Date.now()}.${ext}`;
+    const { error: upErr } = await db.storage.from('team-photos').upload(path, file, { cacheControl: '3600', upsert: true });
+    if (upErr) throw upErr;
+    const { data: { publicUrl } } = db.storage.from('team-photos').getPublicUrl(path);
+    _stagedAvatarUrl = publicUrl;
+    av.innerHTML = `<img src="${publicUrl}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`;
+    status.textContent = 'Uploaded — click Save to apply.';
+    status.style.color = 'var(--success)';
+  } catch (err) {
+    console.error('Avatar upload failed:', err);
+    status.textContent = 'Upload failed: ' + (err.message || err);
+    status.style.color = 'var(--p-urgent)';
+  } finally {
+    e.target.value = ''; // reset so the same file can be re-picked
+  }
+}
+
+async function saveUserProfile() {
+  if (!_editingUserId) return;
+  const btn = document.getElementById('editUserSaveBtn');
+  const err = document.getElementById('editUserError');
+  err.classList.remove('show');
+
+  // Capture any chip the admin typed but didn't press Enter on
+  const trailingRole = document.getElementById('editEmployeeRolesInput').value.trim();
+  if (trailingRole && !_chipState.editEmployeeRoles.includes(trailingRole)) _chipState.editEmployeeRoles.push(trailingRole);
+
+  const updates = {
+    full_name:      document.getElementById('editUserFullName').value.trim(),
+    username:       document.getElementById('editUserUsername').value.trim(),
+    job_title:      document.getElementById('editUserJobTitle').value.trim(),
+    bio:            document.getElementById('editUserBio').value.trim(),
+    role:           document.getElementById('editUserRole').value,
+    employee_roles: [..._chipState.editEmployeeRoles],
+  };
+  if (_stagedAvatarUrl) updates.avatar_url = _stagedAvatarUrl;
+  if (!updates.full_name) { err.textContent = 'Full name is required'; err.classList.add('show'); return; }
+
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const { error } = await db.from('profiles').update(updates).eq('id', _editingUserId);
+    if (error) throw error;
+    showToast('Profile updated', 'success');
+    closeEditUserModal();
+    await loadUsers();
+    renderUserList();
+  } catch (e) {
+    err.textContent = 'Save failed: ' + (e.message || e);
+    err.classList.add('show');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Save Changes';
+  }
 }
 
 function renderUserList() {
@@ -1280,14 +1516,21 @@ function renderUserList() {
     const avatarInner = u.avatar_url
       ? `<img src="${u.avatar_url}" alt="${u.full_name}" onerror="this.outerHTML='${initials}'" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`
       : initials;
+    // Surface employee roles as small inline chips next to the meta line
+    const roles = Array.isArray(u.employee_roles) ? u.employee_roles : [];
+    const rolesHtml = roles.length
+      ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">${roles.slice(0, 4).map(r => `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:var(--bg-surface);border:1px solid var(--border);font-size:10px;font-weight:600;color:var(--text-2);">${String(r).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</span>`).join('')}${roles.length > 4 ? `<span style="font-size:10px;color:var(--text-3);align-self:center;">+${roles.length - 4}</span>` : ''}</div>`
+      : '';
     return `<div class="user-card">
       <div class="user-avatar ${lvl.class}" data-user-id="${u.id}" style="width:40px;height:40px;font-size:13px;border-color:${lvl.color};background:linear-gradient(135deg,${lvl.color}33,${lvl.color}11);overflow:hidden;">${avatarInner}</div>
       <div class="user-card-info">
         <div class="user-card-name">${u.full_name}${u.role==='admin'?'<span class="admin-tag">ADMIN</span>':''}</div>
         <div class="user-card-meta">@${u.username} · ${totalHrs.toFixed(1)}h · ${userLogs.length} tasks</div>
+        ${rolesHtml}
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm" onclick="viewUser('${u.id}')">View →</button>
+        <button class="btn btn-secondary btn-sm" title="Edit profile" onclick="openEditUserModal('${u.id}')">✏️ Edit</button>
         ${isSelf ? '' : `<button class="btn btn-secondary btn-sm" title="Reset Password" onclick="openResetPassModal('${u.id}','${u.full_name.replace(/'/g,"\\'")}')">🔑</button>`}
         ${isSelf ? '' : `<button class="btn btn-danger btn-sm btn-icon" title="Delete" onclick="openDeleteUserModal('${u.id}','${u.full_name.replace(/'/g,"\\'")}')">🗑️</button>`}
       </div>
