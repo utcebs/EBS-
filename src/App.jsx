@@ -20,6 +20,20 @@ const loadPptx = () => import('pptxgenjs').then(m => m.default)
 // recharts vendor (~80 KB gzipped) only ships when the dashboard route
 // actually mounts.
 const DashboardCharts = React.lazy(() => import('./components/DashboardCharts'))
+// Same pattern for ProjectDetail's four chart blocks. Three named exports
+// share one chunk so opening a project detail only triggers one network
+// fetch for the recharts vendor.
+const ProjectDetailChartsLazy = React.lazy(() => import('./components/ProjectDetailCharts').then(m => ({
+  default: function ProjectDetailChartsBundle({ kind, ...props }) {
+    if (kind === 'dev') return <m.DevStatusPie {...props} />
+    if (kind === 'uat') return <m.UatStatusPie {...props} />
+    if (kind === 'risk') return <m.RiskBar {...props} />
+    return null
+  }
+})))
+const ChartFallback = ({ height = 220 }) => (
+  <div className="w-full animate-pulse bg-surface-100 rounded-lg" style={{ height }} />
+)
 
 // ─── Toast (lightweight, top-right, auto-dismiss) ───────────
 // Self-contained so main.jsx can call it from a global error handler
@@ -1534,34 +1548,20 @@ function ProjectDetail() {
             <div className="bg-white rounded-2xl p-6 border border-surface-200">
               <h3 className="text-sm font-semibold text-surface-700 mb-1">Development Status</h3>
               <p className="text-xs text-surface-400 mb-3">Click a segment to see milestones</p>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={devStatusData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value"
-                    label={({ name, value }) => `${name} (${value})`} labelLine={false}
-                    onClick={(d) => { const filtered = milestones.filter(m => m.development_status === d.name); setDashDrill({ title: `Dev: ${d.name} (${filtered.length})`, items: filtered, type: 'milestones' }) }}
-                    cursor="pointer">
-                    {devStatusData.map((d, i) => <Cell key={i} fill={DEV_STATUS_COLORS[d.name]?.hex || '#94a3b8'} />)}
-                  </Pie>
-                  <RTooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<ChartFallback height={220} />}>
+                <ProjectDetailChartsLazy kind="dev" data={devStatusData} colors={DEV_STATUS_COLORS}
+                  onDrill={(name) => { const filtered = milestones.filter(m => m.development_status === name); setDashDrill({ title: `Dev: ${name} (${filtered.length})`, items: filtered, type: 'milestones' }) }} />
+              </Suspense>
             </div>
 
             {/* UAT Status Pie */}
             <div className="bg-white rounded-2xl p-6 border border-surface-200">
               <h3 className="text-sm font-semibold text-surface-700 mb-1">UAT Status</h3>
               <p className="text-xs text-surface-400 mb-3">Click a segment to see milestones</p>
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie data={uatStatusData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value"
-                    label={({ name, value }) => `${name} (${value})`} labelLine={false}
-                    onClick={(d) => { const filtered = milestones.filter(m => m.uat_status === d.name); setDashDrill({ title: `UAT: ${d.name} (${filtered.length})`, items: filtered, type: 'milestones' }) }}
-                    cursor="pointer">
-                    {uatStatusData.map((d, i) => <Cell key={i} fill={UAT_STATUS_COLORS[d.name]?.hex || '#94a3b8'} />)}
-                  </Pie>
-                  <RTooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<ChartFallback height={220} />}>
+                <ProjectDetailChartsLazy kind="uat" data={uatStatusData} colors={UAT_STATUS_COLORS}
+                  onDrill={(name) => { const filtered = milestones.filter(m => m.uat_status === name); setDashDrill({ title: `UAT: ${name} (${filtered.length})`, items: filtered, type: 'milestones' }) }} />
+              </Suspense>
             </div>
           </div>
         ) : (
@@ -1579,30 +1579,18 @@ function ProjectDetail() {
             <div className="bg-white rounded-2xl p-6 border border-surface-200">
               <h3 className="text-sm font-semibold text-surface-700 mb-1">Risks by Impact</h3>
               <p className="text-xs text-surface-400 mb-3">Click a bar to see risks</p>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={riskByImpact}>
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <RTooltip />
-                  <Bar dataKey="value" fill="#ef4444" radius={[6, 6, 0, 0]} barSize={32}
-                    onClick={(d) => { const filtered = risks.filter(r => r.impact === d.name); setDashDrill({ title: `${d.name} Impact Risks (${filtered.length})`, items: filtered, type: 'risks' }) }}
-                    cursor="pointer" />
-                </BarChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<ChartFallback height={180} />}>
+                <ProjectDetailChartsLazy kind="risk" data={riskByImpact} fill="#ef4444"
+                  onDrill={(name) => { const filtered = risks.filter(r => r.impact === name); setDashDrill({ title: `${name} Impact Risks (${filtered.length})`, items: filtered, type: 'risks' }) }} />
+              </Suspense>
             </div>
             <div className="bg-white rounded-2xl p-6 border border-surface-200">
               <h3 className="text-sm font-semibold text-surface-700 mb-1">Risks by Likelihood</h3>
               <p className="text-xs text-surface-400 mb-3">Click a bar to see risks</p>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={riskByLikelihood}>
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <RTooltip />
-                  <Bar dataKey="value" fill="#f59e0b" radius={[6, 6, 0, 0]} barSize={32}
-                    onClick={(d) => { const filtered = risks.filter(r => r.likelihood === d.name); setDashDrill({ title: `${d.name} Likelihood Risks (${filtered.length})`, items: filtered, type: 'risks' }) }}
-                    cursor="pointer" />
-                </BarChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<ChartFallback height={180} />}>
+                <ProjectDetailChartsLazy kind="risk" data={riskByLikelihood} fill="#f59e0b"
+                  onDrill={(name) => { const filtered = risks.filter(r => r.likelihood === name); setDashDrill({ title: `${name} Likelihood Risks (${filtered.length})`, items: filtered, type: 'risks' }) }} />
+              </Suspense>
             </div>
           </div>
         )}
