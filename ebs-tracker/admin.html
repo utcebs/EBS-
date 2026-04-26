@@ -1284,7 +1284,7 @@ function renderUserList() {
       <div class="user-avatar ${lvl.class}" data-user-id="${u.id}" style="width:40px;height:40px;font-size:13px;border-color:${lvl.color};background:linear-gradient(135deg,${lvl.color}33,${lvl.color}11);overflow:hidden;">${avatarInner}</div>
       <div class="user-card-info">
         <div class="user-card-name">${u.full_name}${u.role==='admin'?'<span class="admin-tag">ADMIN</span>':''}</div>
-        <div class="user-card-meta">@${u.username} · ${lvl.icon} ${lvl.name} · ${totalHrs.toFixed(1)}h · ${userLogs.length} tasks</div>
+        <div class="user-card-meta">@${u.username} · ${totalHrs.toFixed(1)}h · ${userLogs.length} tasks</div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-secondary btn-sm" onclick="viewUser('${u.id}')">View →</button>
@@ -1357,7 +1357,7 @@ async function viewUser(uid) {
     <div class="user-avatar ${lvl.class}" data-user-id="${user.id}" style="border-color:${lvl.color};background:linear-gradient(135deg,${lvl.color}33,${lvl.color}11);overflow:hidden;">${detailAvatar}</div>
     <div>
       <div style="font-size:18px;font-weight:800;">${user.full_name}</div>
-      <div style="font-size:13px;color:var(--text-2);">@${user.username} · <span class="level-badge ${lvl.class}" style="padding:3px 10px;font-size:12px;">${lvl.icon} ${lvl.name} · Lv.${lvl.level}</span></div>
+      <div style="font-size:13px;color:var(--text-2);">@${user.username}</div>
     </div>`;
 
   document.getElementById('userDetailKPIs').innerHTML = `
