@@ -23,7 +23,7 @@ async function fetchLandingContent() {
 async function fetchTeamMembers() {
   const { data, error } = await supabasePublic
     .from('profiles')
-    .select('id, full_name, job_title, bio, avatar_url, display_order, is_team_lead')
+    .select('id, full_name, job_title, bio, avatar_url, display_order, is_team_lead, employee_roles')
     .eq('show_on_landing', true)
     .order('display_order', { ascending: true, nullsFirst: false })
   if (error) throw error
@@ -106,10 +106,19 @@ function TeamCard({ member, lead = false, isAdmin, onMemberChange }) {
         onClick={() => setExpanded(!expanded)}
         className="mt-3 flex items-center gap-1 text-xs text-surface-500 hover:text-brand-600 transition-colors"
       >
-        {expanded ? <>Hide bio <ChevronUp size={12} /></> : <>Expand <ChevronDown size={12} /></>}
+        {expanded ? <>Hide details <ChevronUp size={12} /></> : <>Expand <ChevronDown size={12} /></>}
       </button>
       {expanded && (
         <div className="mt-2 bg-white rounded-xl p-3 shadow-md border border-surface-100 max-w-xs text-left">
+          {Array.isArray(member.employee_roles) && member.employee_roles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {member.employee_roles.map((r, i) => (
+                <span key={i} className="inline-block px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold tracking-wide">
+                  {r}
+                </span>
+              ))}
+            </div>
+          )}
           <EditableText
             value={member.bio}
             isAdmin={isAdmin}
