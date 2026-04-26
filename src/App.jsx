@@ -238,6 +238,19 @@ const PIE_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#94a3b8']
 const PRI_PIE_COLORS = ['#ef4444', '#f97316', '#38bdf8', '#94a3b8']
 
 // ─── Utility Components ─────────────────────────────────────
+// Top-of-page brand mark. Renders both variants and lets a CSS rule
+// (.app-dark .page-logo-light / .page-logo-dark) swap them — keeps the
+// component theme-agnostic so we don't need to thread `theme` through
+// every page that wants the logo.
+function PageLogo() {
+  return (
+    <div className="mb-3">
+      <img src="./ebs-logo.png" alt="EBS" className="page-logo-light h-10 w-auto object-contain" />
+      <img src="./ebs-logo-white.png" alt="EBS" className="page-logo-dark h-10 w-auto object-contain" />
+    </div>
+  )
+}
+
 const inputCls = 'w-full px-3 py-2 rounded-lg border border-surface-200 bg-white text-sm text-surface-800 focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-400 transition-colors'
 const selectCls = inputCls
 const textareaCls = inputCls + ' resize-none'
@@ -926,9 +939,10 @@ function Dashboard() {
   }
 
   return <div>
+    <PageLogo />
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
       <div>
-        <h1 className="text-2xl font-bold font-display text-surface-900">Portfolio Dashboard</h1>
+        <h1 className="text-2xl font-bold font-display text-surface-900">Projects Dashboard</h1>
         <p className="text-sm text-surface-500 mt-1">Click any card, chart segment, or bar to drill down into projects</p>
       </div>
       {/* Project-level dashboard selector */}
@@ -1111,6 +1125,7 @@ function ProjectTracker() {
   if (projectsError) return <EmptyState icon={AlertCircle} title="Failed to load projects" description={projectsError} action={<button onClick={refreshProjects} className="text-brand-600 text-sm font-medium">Try again</button>} />
 
   return <div>
+    <PageLogo />
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
       <div>
         <h1 className="text-2xl font-bold font-display text-surface-900">Project Tracker</h1>
@@ -2008,6 +2023,7 @@ function GanttChartPage() {
   months.forEach(m => { const y = m.getFullYear(); if (!years[y]) years[y] = []; years[y].push(m) })
 
   return <div>
+    <PageLogo />
     <div className="mb-6">
       <h1 className="text-2xl font-bold font-display text-surface-900">Gantt Chart</h1>
       <p className="text-sm text-surface-500 mt-1">Project timeline — auto-updates from project data · Click any row to view details</p>

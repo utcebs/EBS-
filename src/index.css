@@ -137,6 +137,12 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   body { overscroll-behavior: none; }
 }
 
+/* ─── Page logo (top-of-page brand mark) ─── */
+/* Default = light theme: show colour logo, hide the white-only variant */
+.page-logo-dark { display: none; }
+.app-dark .page-logo-light { display: none; }
+.app-dark .page-logo-dark  { display: inline-block; }
+
 /* ═════════════════════════════════════════════════════════════════
    DARK MONOCHROME THEME — applied to non-landing routes via .app-dark.
    Mirrors the landing page aesthetic: black background, subtle grid,
