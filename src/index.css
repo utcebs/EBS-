@@ -352,6 +352,24 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   font-size: 11px !important;
 }
 
+/* ─── Page title — gold gradient (Dashboard / Tracker / Gantt) ─── */
+/* Light mode: deeper gold for contrast against white surfaces.
+   Dark mode (.app-dark ancestor): brighter champagne gradient. */
+.page-title-gold {
+  font-family: 'Instrument Serif', Georgia, serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.005em !important;
+  background: linear-gradient(180deg, #b8893f 0%, #94692c 60%, #6e4c1c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+}
+.app-dark .page-title-gold {
+  background: linear-gradient(180deg, #f5e6c2 0%, #e6cf94 50%, #caa15a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
 /* ═════════════════════════════════════════════════════════════════
    DARK MONOCHROME THEME — applied to non-landing routes via .app-dark.
    Mirrors the landing page aesthetic: black background, subtle grid,

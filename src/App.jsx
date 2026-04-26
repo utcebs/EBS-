@@ -948,7 +948,7 @@ function Dashboard() {
     <PageLogo />
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
       <div>
-        <h1 className="text-2xl font-bold font-display text-surface-900">Projects Dashboard</h1>
+        <h1 className="page-title-gold text-3xl">Projects Dashboard</h1>
         <p className="text-sm text-surface-500 mt-1">Click any card, chart segment, or bar to drill down into projects</p>
       </div>
       {/* Project-level dashboard selector */}
@@ -1134,7 +1134,7 @@ function ProjectTracker() {
     <PageLogo />
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
       <div>
-        <h1 className="text-2xl font-bold font-display text-surface-900">Project Tracker</h1>
+        <h1 className="page-title-gold text-3xl">Project Tracker</h1>
         <p className="text-sm text-surface-500 mt-1">{projects.length} projects · {filtered.length} shown · Click any row to view details</p>
       </div>
       {isAdmin && (
@@ -2031,7 +2031,7 @@ function GanttChartPage() {
   return <div>
     <PageLogo />
     <div className="mb-6">
-      <h1 className="text-2xl font-bold font-display text-surface-900">Gantt Chart</h1>
+      <h1 className="page-title-gold text-3xl">Gantt Chart</h1>
       <p className="text-sm text-surface-500 mt-1">Project timeline — auto-updates from project data · Click any row to view details</p>
     </div>
     <div className="flex flex-wrap gap-4 mb-4">
