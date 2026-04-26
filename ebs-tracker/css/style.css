@@ -1017,3 +1017,142 @@ body:not(.light-mode) textarea:focus {
    badges (Support/Testing/Project), and the per-employee KPI tints stay
    on their semantic palettes — meaning-bearing color shouldn't get
    recolored to gold. */
+
+/* ─── SIDEBAR LUXE — match the React app's black-and-gold panel ─── */
+/* Layered warm-black backdrop, gold right-edge trim, hairline gold
+   dividers. Active link gets a 2px glowing gold left rail. Light mode
+   keeps its existing cream/brown sidebar look — these rules only
+   activate when body has no .light-mode class. */
+body:not(.light-mode) .sidebar {
+  background:
+    radial-gradient(120% 60% at 0% 0%, rgba(212,184,123,0.10), transparent 55%),
+    radial-gradient(80% 50% at 100% 100%, rgba(138,99,40,0.08), transparent 60%),
+    linear-gradient(180deg, #0c0a08 0%, #0a0907 60%, #070608 100%) !important;
+  border-right: 0 !important;
+  isolation: isolate;
+}
+
+/* Faint film grain — leather portfolio texture */
+body:not(.light-mode) .sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Etched gold trim on the right edge */
+body:not(.light-mode) .sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(212,184,123,0.10) 12%,
+    rgba(212,184,123,0.20) 30%,
+    rgba(212,184,123,0.20) 70%,
+    rgba(212,184,123,0.10) 88%,
+    transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+body:not(.light-mode) .sidebar > * { position: relative; z-index: 2; }
+
+/* Section dividers become gold gradient hairlines */
+body:not(.light-mode) .sidebar-header,
+body:not(.light-mode) .sidebar-user,
+body:not(.light-mode) .sidebar-xp,
+body:not(.light-mode) .sidebar-footer {
+  border-color: transparent !important;
+}
+body:not(.light-mode) .sidebar-header { border-bottom: 0 !important; position: relative; }
+body:not(.light-mode) .sidebar-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 24px; right: 24px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212,184,123,0.32), transparent);
+  opacity: 1;
+}
+body:not(.light-mode) .sidebar-user { border-bottom: 1px solid rgba(212,184,123,0.12) !important; }
+body:not(.light-mode) .sidebar-xp { border-bottom: 1px solid rgba(212,184,123,0.12) !important; }
+body:not(.light-mode) .sidebar-footer { border-top: 1px solid rgba(212,184,123,0.12) !important; }
+
+/* Brand wordmark — Playfair gradient, slightly tighter feel */
+body:not(.light-mode) .logo-text {
+  background: linear-gradient(180deg, #ffffff 0%, #e6cf94 60%, #caa15a 100%) !important;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.015em;
+}
+
+/* Nav link hover — warm wash + champagne text */
+body:not(.light-mode) .nav-link {
+  position: relative;
+  color: rgba(255,245,230,0.6) !important;
+  transition: color .35s ease, background-color .35s ease;
+}
+body:not(.light-mode) .nav-link:hover {
+  background: rgba(212,184,123,0.07) !important;
+  color: #f5e6c2 !important;
+}
+body:not(.light-mode) .nav-link .nav-icon {
+  filter: saturate(1.1);
+}
+
+/* Active link — override the earlier rule with a richer treatment:
+   2px gold rail + glow, gradient bg fading to right, no border-left
+   (the rail is rendered as a ::before so the outer border can stay
+   crisp). Keep `border` declarations cleared so the chunky 1px gold
+   border from the earlier rule doesn't double up. */
+body:not(.light-mode) .sidebar-nav a.active {
+  background: linear-gradient(90deg,
+    rgba(212,184,123,0.18) 0%,
+    rgba(212,184,123,0.06) 60%,
+    transparent 100%) !important;
+  border: 0 !important;
+  border-left: 0 !important;
+  color: #fff8e7 !important;
+}
+body:not(.light-mode) .sidebar-nav a.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 9px; bottom: 9px;
+  width: 2px;
+  background: linear-gradient(180deg, #f5e6c2 0%, #d4b87b 50%, #b8893f 100%);
+  border-radius: 2px;
+  box-shadow:
+    0 0 8px rgba(229,207,148,0.55),
+    0 0 16px rgba(212,184,123,0.25);
+}
+
+/* User name + level tag refinement */
+body:not(.light-mode) .user-name { color: #fff8e7 !important; letter-spacing: 0.005em; }
+body:not(.light-mode) .user-level-tag {
+  color: #caa15a !important;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 9px !important;
+}
+
+/* XP bar tint — gold rail track, brighter fill */
+body:not(.light-mode) .sidebar-xp .xp-row { color: #caa15a; letter-spacing: 0.18em; }
+body:not(.light-mode) .sidebar-xp .xp-track { background: rgba(212,184,123,0.10); }
+
+/* Logout button — gold hairline outline, copper-red hover */
+body:not(.light-mode) .logout-btn {
+  border-color: rgba(212,184,123,0.20) !important;
+  color: rgba(245,230,194,0.7) !important;
+  background: transparent !important;
+}
+body:not(.light-mode) .logout-btn:hover {
+  background: rgba(192,57,43,0.10) !important;
+  border-color: rgba(229,123,113,0.50) !important;
+  color: #f5b8b0 !important;
+}
