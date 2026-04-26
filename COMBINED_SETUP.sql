@@ -356,13 +356,16 @@ DROP POLICY IF EXISTS "admin_update_landing" ON landing_page_content;
 CREATE POLICY "admin_update_landing" ON landing_page_content FOR UPDATE USING (auth.role() = 'authenticated');
 
 -- profiles — extra columns used by the landing page team section
+-- + employee_roles (free-form job-role chips, separate from `role`
+--   which is the application permission user/admin)
 ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS avatar_url TEXT,
   ADD COLUMN IF NOT EXISTS job_title TEXT,
   ADD COLUMN IF NOT EXISTS bio TEXT,
   ADD COLUMN IF NOT EXISTS display_order INT,
   ADD COLUMN IF NOT EXISTS show_on_landing BOOLEAN DEFAULT false,
-  ADD COLUMN IF NOT EXISTS is_team_lead BOOLEAN DEFAULT false;
+  ADD COLUMN IF NOT EXISTS is_team_lead BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS employee_roles TEXT[] DEFAULT '{}';
 
 -- priority_tasks — on-hold status + reason tracking
 ALTER TABLE priority_tasks DROP CONSTRAINT IF EXISTS priority_tasks_status_check;
