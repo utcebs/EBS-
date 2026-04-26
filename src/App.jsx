@@ -763,39 +763,45 @@ function Layout() {
     )}
 
     {/* Sidebar — always overlay, hidden by default on all screen sizes */}
-    <aside className={`fixed z-40 h-full w-64 bg-surface-900 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-      <div className="px-5 py-5 border-b border-surface-700/50">
+    <aside className={`sidebar-luxe fixed z-40 h-full w-64 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className="px-5 py-5">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl overflow-hidden bg-white flex items-center justify-center"><img src="./ebs-logo.png" alt="EBS" className="w-full h-full object-contain" /></div>
-          <div><h1 className="text-sm font-bold text-white font-display tracking-tight">EBS Projects</h1><p className="text-[11px] text-surface-400">Tracker & Roadmap</p></div>
+          <div className="luxe-logo-frame w-10 h-10 flex items-center justify-center shrink-0"><img src="./ebs-logo-white.png" alt="EBS" className="w-7 h-7 object-contain" /></div>
+          <div className="min-w-0">
+            <h1 className="luxe-title">EBS Projects</h1>
+            <p className="luxe-subtitle">Tracker · Roadmap</p>
+          </div>
         </div>
       </div>
+      <div className="luxe-divider mx-5" />
       <nav className="flex-1 px-3 py-4 space-y-1">
         {nav.map(({ path, label, icon: Icon }) => (
           <Link key={path} to={path} onClick={() => setSidebarOpen(false)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${isActive(path) ? 'bg-brand-600/20 text-brand-300' : 'text-surface-400 hover:text-white hover:bg-surface-800'}`}>
+            className={`luxe-link flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium ${isActive(path) ? 'is-active' : ''}`}>
             <Icon size={18} />{label}
           </Link>
         ))}
         {/* EBS Tracker separator + link */}
-        <div className="pt-3 mt-1 border-t border-surface-700/50">
-          <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-surface-600">Tools</p>
+        <div className="pt-4 mt-2">
+          <div className="luxe-divider mb-3 mx-1" />
+          <p className="luxe-section-label px-4 pb-2">Tools</p>
           <a
             href="./ebs-tracker/index.html"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-surface-400 hover:text-white hover:bg-surface-800 transition-all"
+            className="luxe-link flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium"
             title={isAdmin ? 'Open EBS Tracker (you are already logged in)' : 'EBS Tracker — login required'}
           >
             <BarChart3 size={18} />
             <span>EBS Tracker</span>
-            {isAdmin && <span className="ml-auto text-[9px] bg-emerald-700/40 text-emerald-400 px-1.5 py-0.5 rounded-full font-semibold">Admin</span>}
+            {isAdmin && <span className="luxe-admin-pill ml-auto">Admin</span>}
           </a>
         </div>
       </nav>
-      <div className="px-3 py-4 border-t border-surface-700/50">
-        {/* Theme toggle — always visible, works on landing (no-op) and data pages */}
+      <div className="px-3 py-4">
+        <div className="luxe-divider mb-3 mx-1" />
+        {/* Theme toggle */}
         <button
           onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-          className="flex items-center justify-between gap-3 px-3 py-2.5 mb-2 rounded-xl text-sm font-medium text-surface-400 hover:text-white hover:bg-surface-800 w-full transition-all"
+          className="luxe-link flex items-center justify-between gap-3 px-4 py-2.5 mb-1 rounded-xl text-sm font-medium w-full"
           title="Toggle theme"
           aria-label="Toggle theme"
         >
@@ -803,34 +809,34 @@ function Layout() {
             {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
             {theme === 'dark' ? 'Dark mode' : 'Light mode'}
           </span>
-          <span className="relative w-9 h-5 rounded-full bg-surface-800">
-            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${theme === 'dark' ? 'left-0.5' : 'left-[18px]'}`} />
+          <span className="luxe-toggle-track relative w-9 h-5 rounded-full">
+            <span className={`luxe-toggle-knob absolute top-0.5 w-4 h-4 rounded-full transition-all ${theme === 'dark' ? 'left-0.5' : 'left-[18px]'}`} />
           </span>
         </button>
         {isAdmin ? (
           <div className="space-y-1">
             <Link to="/admin/team" onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${location.pathname === '/admin/team' ? 'bg-brand-600/20 text-brand-300' : 'text-surface-400 hover:text-white hover:bg-surface-800'}`}>
+              className={`luxe-link flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium ${location.pathname === '/admin/team' ? 'is-active' : ''}`}>
               <UserCog size={18} /> Landing Team
             </Link>
-            <button onClick={signOut} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-surface-400 hover:text-white hover:bg-surface-800 w-full transition-all">
+            <button onClick={signOut} className="luxe-link flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium w-full">
               <LogOut size={18} /> Sign Out
             </button>
-            <div className="px-3 py-2 mt-2">
+            <div className="px-4 py-2 mt-2">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center"><Shield className="text-white" size={12} /></div>
-                <span className="text-xs text-surface-400 truncate">{user.email}</span>
+                <div className="luxe-shield w-6 h-6 rounded-full flex items-center justify-center shrink-0"><Shield size={12} /></div>
+                <span className="luxe-email truncate">{user.email}</span>
               </div>
             </div>
           </div>
         ) : (
           <>
             <Link to="/login" onClick={() => setSidebarOpen(false)}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-surface-400 hover:text-white hover:bg-surface-800 transition-all">
+              className="luxe-link flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium">
               <LogIn size={18} /> Admin Login
             </Link>
-            <div className="px-3 py-2 mt-2 flex items-center gap-2">
-              <Eye size={14} className="text-surface-500" /><span className="text-xs text-surface-500">Viewing as Guest (Read-only)</span>
+            <div className="px-4 py-2 mt-2 flex items-center gap-2">
+              <Eye size={14} className="luxe-email" /><span className="luxe-email">Viewing as Guest</span>
             </div>
           </>
         )}
