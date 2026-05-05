@@ -408,31 +408,73 @@ export default function LandingPage({ isAdmin }) {
                 </div>
               )}
 
-              {/* Connector */}
+              {/* Vertical drop from lead to the horizontal trunk */}
               {lead && members.length > 0 && (
-                <div className="w-px h-10 bg-surface-300" />
+                <div className="hidden sm:block w-px h-10 bg-surface-300" />
               )}
 
               {/* Members row */}
               {members.length > 0 && (
-                <>
-                  <div className="hidden sm:block w-full max-w-xl h-px bg-surface-300" />
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 sm:gap-12 mt-10 relative">
-                    {members.map(m => (
-                      <div key={m.id} className="relative">
-                        {/* vertical connector */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 sm:gap-12 mt-10 relative w-full">
+                  {/* Horizontal trunk — spans from the first cell's centre
+                      to the last cell's centre. With N equal-width columns
+                      and total gap G, the inset on each side equals
+                      (100% - G) / (2N). Hidden for a single member (no peers
+                      to connect to). Only renders if the row has ≥2 cells
+                      visible — i.e. ≥2 members on mobile, ≥2 on desktop;
+                      capped at 3 on desktop because that's the row-1 width. */}
+                  {members.length > 1 && (
+                    <>
+                      {/* Mobile: 2 cols, gap-8 = 32px → inset (100% − 32px)/4 */}
+                      <div
+                        className="block sm:hidden absolute -top-10 h-px bg-surface-300"
+                        style={{
+                          left: 'calc((100% - 32px) / 4)',
+                          right: 'calc((100% - 32px) / 4)',
+                        }}
+                      />
+                      {/* Desktop: 3 cols, gap-12 = 48px → inset (100% − 96px)/6.
+                          When members.length === 2 the grid has only 2
+                          populated cells in the 3-col track, so the trunk
+                          should match cell-1 and cell-2 centres
+                          (1/6 and 1/2): inset L = (100% − 96px)/6, R = 50%. */}
+                      <div
+                        className="hidden sm:block absolute -top-10 h-px bg-surface-300"
+                        style={
+                          members.length === 2
+                            ? {
+                                left: 'calc((100% - 96px) / 6)',
+                                right: '50%',
+                              }
+                            : {
+                                left: 'calc((100% - 96px) / 6)',
+                                right: 'calc((100% - 96px) / 6)',
+                              }
+                        }
+                      />
+                    </>
+                  )}
+
+                  {members.map((m, i) => (
+                    <div key={m.id} className="relative">
+                      {/* Vertical connector — only on row-1 cells. Mobile
+                          shows 2 cols so cells 0–1 are row 1; desktop shows
+                          3 cols so cells 0–2 are row 1. Connectors are
+                          desktop-only (`hidden sm:block`) and only on
+                          indices < 3 to avoid dangling drops on row 2+. */}
+                      {i < 3 && (
                         <div className="hidden sm:block absolute left-1/2 -top-10 w-px h-10 bg-surface-300 -translate-x-1/2" />
-                        <TeamCard
-                          member={m}
-                          isAdmin={isAdmin}
-                          onMemberChange={mm =>
-                            setTeam(t => t.map(x => (x.id === mm.id ? mm : x)))
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </>
+                      )}
+                      <TeamCard
+                        member={m}
+                        isAdmin={isAdmin}
+                        onMemberChange={mm =>
+                          setTeam(t => t.map(x => (x.id === mm.id ? mm : x)))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}
