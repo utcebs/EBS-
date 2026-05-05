@@ -937,6 +937,36 @@ function Dashboard() {
     .filter(p => p.start_date === yearMonthKey)
     .sort((a, b) => (a.project_number || 0) - (b.project_number || 0))
 
+  // Progress so far — completed projects bucketed by the month they finished.
+  // Prefer end_date (YYYY-MM), fall back to updated_at's month if missing.
+  // Zero-fills the full range so the bar strip reads as a continuous timeline.
+  const completedProjects = projects.filter(p => p.status === 'Completed')
+  const completedByMonth = {}
+  completedProjects.forEach(p => {
+    let key = p.end_date
+    if (!key && p.updated_at) {
+      const d = new Date(p.updated_at)
+      if (!isNaN(d)) key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    }
+    if (!key) return
+    if (!completedByMonth[key]) completedByMonth[key] = []
+    completedByMonth[key].push(p)
+  })
+  let progressMonths = []
+  const completedKeys = Object.keys(completedByMonth).sort()
+  if (completedKeys.length > 0) {
+    const [fy, fm] = completedKeys[0].split('-').map(Number)
+    const cursor = new Date(fy, fm - 1, 1)
+    const endOfRange = new Date(now.getFullYear(), now.getMonth(), 1)
+    while (cursor <= endOfRange) {
+      const k = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+      progressMonths.push({ key: k, projects: completedByMonth[k] || [] })
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+    if (progressMonths.length > 12) progressMonths = progressMonths.slice(-12)
+  }
+  const maxCompletedInMonth = progressMonths.reduce((m, x) => Math.max(m, x.projects.length), 0)
+
   // Clickable pie chart handler
   const onPieClick = (data, type) => {
     if (type === 'status') drillStatus(data.name)
@@ -1022,6 +1052,42 @@ function Dashboard() {
         </div>
       </div>
     </div>
+
+    {/* Progress so far — completed projects, month by month */}
+    {completedProjects.length > 0 && (
+      <section className="dash-progress-section">
+        <div className="dash-month-eyebrow">Progress So Far</div>
+        <h2 className="dash-month-title">{completedProjects.length} <span className="yr">delivered</span></h2>
+        <p className="dash-month-sub">Completed projects, month by month. Click a month to see what shipped.</p>
+        <div className="dash-progress-strip">
+          {progressMonths.map(({ key, projects: ps }) => {
+            const [y, m] = key.split('-').map(Number)
+            const monthLabel = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short' })
+            const heightPct = maxCompletedInMonth > 0 ? (ps.length / maxCompletedInMonth) * 100 : 0
+            return (
+              <button
+                key={key}
+                type="button"
+                className="dash-progress-col"
+                disabled={ps.length === 0}
+                onClick={() => ps.length && setDrillDown({
+                  title: `Completed in ${monthLabel} '${String(y).slice(2)} (${ps.length})`,
+                  projects: ps,
+                })}
+              >
+                <div className="dash-progress-bar-track">
+                  <div className="dash-progress-bar-fill" style={{ height: `${heightPct}%` }} />
+                </div>
+                <div className="dash-progress-count">{ps.length}</div>
+                <div className="dash-progress-month">
+                  {monthLabel}<span className="yr">'{String(y).slice(2)}</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </section>
+    )}
 
     {/* Editorial closer — projects whose start_date is the current month */}
     <section className="dash-month-section">
