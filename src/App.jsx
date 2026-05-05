@@ -2058,8 +2058,21 @@ function GanttChartPage() {
 
   if (projectsLoading) return <Spinner />
 
-  const parseDate = (d) => { if (!d) return null; if (d.length === 7) return new Date(d + '-01'); return new Date(d) }
-  const allDates = projects.flatMap(p => [parseDate(p.start_date), parseDate(p.end_date)]).filter(Boolean)
+  // YYYY-MM strings need different anchoring at each end of a bar:
+  // start_date='2026-03' should mean "Mar 1" (bar starts at left edge of
+  // March column); end_date='2026-03' should mean "Mar 31" (bar fills
+  // the column). Using a single Mar-1 parser made every bar visually
+  // end one column early.
+  const parseStartDate = (d) => { if (!d) return null; if (d.length === 7) return new Date(d + '-01'); return new Date(d) }
+  const parseEndDate = (d) => {
+    if (!d) return null
+    if (d.length === 7) {
+      const [y, m] = d.split('-').map(Number)
+      return new Date(y, m, 0) // day 0 of next month = last day of YYYY-MM
+    }
+    return new Date(d)
+  }
+  const allDates = projects.flatMap(p => [parseStartDate(p.start_date), parseEndDate(p.end_date)]).filter(Boolean)
   if (allDates.length === 0) return <EmptyState icon={GanttIcon} title="No date data" description="Projects need start/end dates for the Gantt chart." />
 
   const minDate = new Date(Math.min(...allDates.map(d => d.getTime())))
@@ -2107,12 +2120,18 @@ function GanttChartPage() {
               ))}
             </div>
             <div className="flex">
-              {months.map((m, i) => (<div key={i} className="text-center text-[9px] text-surface-400 py-1.5 border-r border-surface-100" style={{ width: `${100 / months.length}%` }}>{MONTH_NAMES[m.getMonth()]}</div>))}
+              {months.map((m, i) => (
+                <div key={i}
+                  className={`text-center text-[9px] py-1.5 border-r border-surface-100 gantt-month-cell gantt-month-${m.getFullYear() % 2 === 0 ? 'even' : 'odd'}`}
+                  style={{ width: `${100 / months.length}%` }}>
+                  {MONTH_NAMES[m.getMonth()]}
+                </div>
+              ))}
             </div>
           </div>
         </div>
         {projects.map(p => {
-          const start = parseDate(p.start_date); const end = parseDate(p.end_date)
+          const start = parseStartDate(p.start_date); const end = parseEndDate(p.end_date)
           if (!start || !end) return null
           const left = getPos(start); const right = getPos(end); const width = Math.max(right - left, 1)
           const pct = p.percent_complete === 'Ongoing' ? 50 : parseInt(p.percent_complete) || 0

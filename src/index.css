@@ -1003,6 +1003,25 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 }
 .app-dark .dash-progress-month { color: rgba(255,255,255,0.45); }
 
+/* ─── Gantt month labels — alternate styles per year ─── */
+/* Distinguishes adjacent years (e.g. 2025 vs 2026) so the timeline
+   reads year-banded at a glance. Pairs across light + dark modes. */
+.gantt-month-cell { letter-spacing: 0.04em; transition: color .2s ease; }
+/* Light mode */
+.gantt-month-even { color: rgb(51, 65, 85); font-weight: 500; }       /* slate-700 — emphasised */
+.gantt-month-odd  { color: rgb(148, 163, 184); font-style: italic; }  /* slate-400 — receding */
+/* Dark mode (.app-dark on <main>) */
+.app-dark .gantt-month-even {
+  color: #e6cf94;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.app-dark .gantt-month-odd {
+  color: rgba(255, 255, 255, 0.42);
+  font-style: italic;
+  letter-spacing: 0.06em;
+}
+
 @media (max-width: 640px) {
   .dash-month-row { grid-template-columns: 56px 1fr auto; gap: 12px; padding: 14px 4px; }
   .dash-month-row > .dash-month-date { display: none; }
