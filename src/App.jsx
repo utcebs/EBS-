@@ -1365,6 +1365,7 @@ function ProjectFormModal({ open, project, onClose, onSave }) {
 function ProjectDetail() {
   const { id } = useParams()
   const { isAdmin } = useAuth()
+  const { refreshProjects } = useProjects()
   const navigate = useNavigate()
   const [project, setProject] = useState(null)
   const [milestones, setMilestones] = useState([])
@@ -1510,7 +1511,12 @@ function ProjectDetail() {
       const { error } = await supabase.from('projects').update(data).eq('id', project.id)
       if (error) throw error
       showToast('Project updated', 'success')
-      setShowEditProject(false); fetchAll()
+      setShowEditProject(false)
+      // Refresh both the local detail page AND the global projects cache
+      // so other surfaces (Dashboard, Gantt, ProjectTracker) reflect the
+      // change without needing a full reload.
+      fetchAll()
+      refreshProjects()
     } catch (e) { showToast('Save failed: ' + (e.message || e), 'error') }
   }
 
