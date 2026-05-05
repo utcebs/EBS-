@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ChevronDown, ChevronUp, ArrowRight, Users, User,
-  Sparkles, Target, Rocket, Mail
+  Sparkles, Target, Mail
 } from 'lucide-react'
 import { supabase, supabasePublic } from '../supabaseClient'
 import { EditableText, EditableImage } from './Editable'
@@ -321,21 +321,25 @@ export default function LandingPage({ isAdmin }) {
       <section className="bg-surface-50">
         <div className="max-w-5xl mx-auto px-6 lg:px-8 py-16">
           <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold mb-3">
-              <Rocket size={12} /> ACHIEVEMENTS
-            </div>
-            <h2 className="text-2xl lg:text-3xl font-bold font-display text-surface-900">What we've delivered</h2>
+            <h2 className="text-2xl lg:text-3xl font-bold font-display text-surface-900">Moonshot Projects</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {(content.achievements || []).map((a, i) => (
-              <AchievementTile
-                key={i}
-                item={a}
-                index={i}
-                isAdmin={isAdmin}
-                onSave={saveAchievement}
-              />
-            ))}
+            {(content.achievements || []).map((a, i) => {
+              // Tile 1 keeps its DB icon; tiles 2 and 3 get domain-specific
+              // overrides (e-commerce + IT security) so the visuals stay
+              // tied to their categories regardless of past admin edits.
+              const ICON_BY_INDEX = ['', '🛒', '🛡️']
+              const item = ICON_BY_INDEX[i] ? { ...a, icon: ICON_BY_INDEX[i] } : a
+              return (
+                <AchievementTile
+                  key={i}
+                  item={item}
+                  index={i}
+                  isAdmin={isAdmin}
+                  onSave={saveAchievement}
+                />
+              )
+            })}
           </div>
           <div className="text-center mt-10">
             <button
