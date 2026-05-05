@@ -915,10 +915,12 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 }
 .app-dark .dash-month-empty { color: rgba(255,255,255,0.4); border-color: rgba(255,255,255,0.06); }
 
-/* ─── Dashboard "Progress So Far" — month-by-month completed strip ─── */
-/* Reuses .dash-month-eyebrow / -title / -sub / .yr for typography
-   consistency with the "Starting This Month" closer that follows.
-   The strip itself is a row of clickable bars; height = count / max. */
+/* ─── Dashboard "Progress So Far" — 3-bar lifecycle per month ─── */
+/* Each month column shows three side-by-side bars in graduated gold
+   shades: light champagne (Started) → mid gold (In Progress) → deep
+   bronze (Completed). Each bar is independently clickable and drills
+   into that state's projects for that month. Light + dark themes
+   share the same hue family but shift saturation/contrast. */
 .dash-progress-section {
   position: relative;
   margin-top: 2.5rem;
@@ -927,63 +929,128 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 }
 .app-dark .dash-progress-section { border-top-color: rgba(255,255,255,0.08); }
 
+/* Legend row */
+.dash-progress-legend {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.dash-progress-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: rgba(26,22,18,0.55);
+}
+.app-dark .dash-progress-legend-item { color: rgba(245,230,194,0.7); }
+
+.dash-progress-dot {
+  width: 10px; height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+.dash-progress-dot.started     { background: linear-gradient(135deg, #d4b87b, #b8893f); }
+.dash-progress-dot.in-progress { background: linear-gradient(135deg, #b8893f, #8a6328); }
+.dash-progress-dot.completed   { background: linear-gradient(135deg, #6e4c1c, #4a3414); }
+.app-dark .dash-progress-dot.started     { background: linear-gradient(135deg, #f5e6c2, #e6cf94); box-shadow: 0 0 6px rgba(245,230,194,0.5); }
+.app-dark .dash-progress-dot.in-progress { background: linear-gradient(135deg, #e6cf94, #caa15a); box-shadow: 0 0 6px rgba(229,207,148,0.45); }
+.app-dark .dash-progress-dot.completed   { background: linear-gradient(135deg, #caa15a, #8a6328); box-shadow: 0 0 6px rgba(202,161,90,0.4); }
+
+/* Strip + columns */
 .dash-progress-strip {
   display: flex;
   gap: 14px;
   align-items: end;
   overflow-x: auto;
   padding: 24px 4px 8px;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 .dash-progress-col {
-  flex: 1 0 64px;
-  min-width: 64px;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  background: transparent; border: 0; padding: 0;
-  cursor: pointer;
-  transition: transform .2s ease;
-  font-family: inherit;
+  flex: 1 0 84px;
+  min-width: 84px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
-.dash-progress-col:disabled { cursor: default; }
-.dash-progress-col:not(:disabled):hover { transform: translateY(-2px); }
 
-.dash-progress-bar-track {
+/* The three bars sit at the bottom of a fixed-height track */
+.dash-progress-bars {
   width: 100%;
   height: 140px;
-  display: flex; align-items: end; justify-content: center;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 4px;
   border-bottom: 1px solid rgba(26,22,18,0.10);
 }
-.app-dark .dash-progress-bar-track { border-bottom-color: rgba(212,184,123,0.20); }
+.app-dark .dash-progress-bars { border-bottom-color: rgba(212,184,123,0.20); }
 
-.dash-progress-bar-fill {
-  width: 70%;
-  background: linear-gradient(180deg, #b8893f 0%, #6e4c1c 100%);
-  border-radius: 6px 6px 0 0;
+/* Each bar is wrapped in a button so it's individually clickable */
+.dash-progress-bar-btn {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: end;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  transition: transform .2s ease, filter .2s ease;
+  font-family: inherit;
+}
+.dash-progress-bar-btn:disabled { cursor: default; }
+.dash-progress-bar-btn:not(:disabled):hover { transform: translateY(-2px); filter: brightness(1.12); }
+
+.dash-progress-bar {
+  width: 100%;
   min-height: 2px;
-  transition: height .6s cubic-bezier(0.2, 0.8, 0.2, 1), filter .2s ease, box-shadow .2s ease;
+  border-radius: 4px 4px 0 0;
+  transition: height .6s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow .2s ease;
 }
-.app-dark .dash-progress-bar-fill {
-  background: linear-gradient(180deg, #f5e6c2 0%, #e6cf94 50%, #caa15a 100%);
-  box-shadow: 0 0 0 1px rgba(212,184,123,0.20) inset;
+
+/* Light mode bar fills — gold gradient, deepening with lifecycle stage */
+.dash-progress-bar.started     { background: linear-gradient(180deg, #d4b87b 0%, #b8893f 100%); }
+.dash-progress-bar.in-progress { background: linear-gradient(180deg, #b8893f 0%, #8a6328 100%); }
+.dash-progress-bar.completed   { background: linear-gradient(180deg, #6e4c1c 0%, #4a3414 100%); }
+
+/* Dark mode bar fills — brighter champagne family for the gold theme */
+.app-dark .dash-progress-bar.started {
+  background: linear-gradient(180deg, #f5e6c2 0%, #e6cf94 100%);
+  box-shadow: 0 0 0 1px rgba(245,230,194,0.18) inset;
 }
-.dash-progress-col:not(:disabled):hover .dash-progress-bar-fill {
-  filter: brightness(1.1);
+.app-dark .dash-progress-bar.in-progress {
+  background: linear-gradient(180deg, #e6cf94 0%, #caa15a 100%);
+  box-shadow: 0 0 0 1px rgba(229,207,148,0.18) inset;
+}
+.app-dark .dash-progress-bar.completed {
+  background: linear-gradient(180deg, #caa15a 0%, #8a6328 100%);
+  box-shadow: 0 0 0 1px rgba(202,161,90,0.18) inset;
+}
+.dash-progress-bar-btn:not(:disabled):hover .dash-progress-bar {
   box-shadow: 0 0 14px rgba(212,184,123,0.4);
 }
 
-.dash-progress-count {
+/* Counts row — three small numbers, mirroring bar order */
+.dash-progress-counts {
+  display: flex;
+  width: 100%;
+  margin-top: 2px;
+}
+.dash-progress-counts span {
+  flex: 1;
+  text-align: center;
   font-family: 'Instrument Serif', Georgia, serif;
-  font-size: 24px; line-height: 1;
+  font-size: 18px;
+  line-height: 1;
   color: #1a1612;
   font-feature-settings: 'lnum' 1, 'tnum' 1;
 }
-.app-dark .dash-progress-count { color: rgba(255,255,255,0.92); }
-.dash-progress-col:disabled .dash-progress-count {
-  color: rgba(26,22,18,0.25);
-}
-.app-dark .dash-progress-col:disabled .dash-progress-count {
-  color: rgba(255,255,255,0.30);
-}
+.app-dark .dash-progress-counts span { color: rgba(255,255,255,0.92); }
+.dash-progress-counts span.is-zero { color: rgba(26,22,18,0.22); }
+.app-dark .dash-progress-counts span.is-zero { color: rgba(255,255,255,0.28); }
 
 .dash-progress-month {
   font-family: 'DM Sans', sans-serif;
@@ -991,6 +1058,7 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   letter-spacing: 0.18em; text-transform: uppercase;
   color: rgba(26,22,18,0.45);
   white-space: nowrap;
+  margin-top: 4px;
 }
 .dash-progress-month .yr {
   font-family: 'Instrument Serif', Georgia, serif;

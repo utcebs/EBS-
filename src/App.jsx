@@ -937,35 +937,51 @@ function Dashboard() {
     .filter(p => p.start_date === yearMonthKey)
     .sort((a, b) => (a.project_number || 0) - (b.project_number || 0))
 
-  // Progress so far — completed projects bucketed by the month they finished.
-  // Prefer end_date (YYYY-MM), fall back to updated_at's month if missing.
-  // Zero-fills the full range so the bar strip reads as a continuous timeline.
-  const completedProjects = projects.filter(p => p.status === 'Completed')
-  const completedByMonth = {}
-  completedProjects.forEach(p => {
-    let key = p.end_date
-    if (!key && p.updated_at) {
-      const d = new Date(p.updated_at)
-      if (!isNaN(d)) key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    }
-    if (!key) return
-    if (!completedByMonth[key]) completedByMonth[key] = []
-    completedByMonth[key].push(p)
-  })
+  // Progress so far — every project's lifecycle bucketed per month.
+  // Three states per month:
+  //   started    — start_date matches the month
+  //   inProgress — start_date is before the month AND (no end_date OR month < end_date)
+  //   completed  — end_date matches the month
+  // A 1-month project (start === end) counts as BOTH started and completed
+  // for that month, with no in-progress (the user's example).
+  // monthOf normalises 'YYYY-MM' and 'YYYY-MM-DD' to 'YYYY-MM' so the
+  // string comparisons work for both formats.
+  const monthOf = (d) => (d ? d.slice(0, 7) : null)
+  const projectsWithStart = projects.filter(p => p.start_date)
   let progressMonths = []
-  const completedKeys = Object.keys(completedByMonth).sort()
-  if (completedKeys.length > 0) {
-    const [fy, fm] = completedKeys[0].split('-').map(Number)
+  let projectsInStripCount = 0
+  let maxLifecycleBar = 0
+  if (projectsWithStart.length > 0) {
+    const earliestStart = monthOf(projectsWithStart.map(p => p.start_date).sort()[0])
+    const [fy, fm] = earliestStart.split('-').map(Number)
     const cursor = new Date(fy, fm - 1, 1)
     const endOfRange = new Date(now.getFullYear(), now.getMonth(), 1)
     while (cursor <= endOfRange) {
       const k = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
-      progressMonths.push({ key: k, projects: completedByMonth[k] || [] })
+      const started = [], inProgress = [], completed = []
+      projects.forEach(p => {
+        const sm = monthOf(p.start_date)
+        const em = monthOf(p.end_date)
+        if (!sm) return
+        if (sm === k) started.push(p)
+        if (em && em === k) completed.push(p)
+        if (sm < k && (!em || k < em)) inProgress.push(p)
+      })
+      progressMonths.push({ key: k, started, inProgress, completed })
       cursor.setMonth(cursor.getMonth() + 1)
     }
     if (progressMonths.length > 12) progressMonths = progressMonths.slice(-12)
+    progressMonths.forEach(d => {
+      maxLifecycleBar = Math.max(maxLifecycleBar, d.started.length, d.inProgress.length, d.completed.length)
+    })
+    const ids = new Set()
+    progressMonths.forEach(({ started, inProgress, completed }) => {
+      started.forEach(p => ids.add(p.id))
+      inProgress.forEach(p => ids.add(p.id))
+      completed.forEach(p => ids.add(p.id))
+    })
+    projectsInStripCount = ids.size
   }
-  const maxCompletedInMonth = progressMonths.reduce((m, x) => Math.max(m, x.projects.length), 0)
 
   // Clickable pie chart handler
   const onPieClick = (data, type) => {
@@ -1053,36 +1069,59 @@ function Dashboard() {
       </div>
     </div>
 
-    {/* Progress so far — completed projects, month by month */}
-    {completedProjects.length > 0 && (
+    {/* Progress so far — every project's lifecycle, month by month */}
+    {progressMonths.length > 0 && (
       <section className="dash-progress-section">
         <div className="dash-month-eyebrow">Progress So Far</div>
-        <h2 className="dash-month-title">{completedProjects.length} <span className="yr">delivered</span></h2>
-        <p className="dash-month-sub">Completed projects, month by month. Click a month to see what shipped.</p>
+        <h2 className="dash-month-title">{projectsInStripCount} <span className="yr">in motion</span></h2>
+        <p className="dash-month-sub">The lifecycle of every project, month by month. Click a bar to drill in.</p>
+        <div className="dash-progress-legend">
+          <span className="dash-progress-legend-item"><span className="dash-progress-dot started" /> Started</span>
+          <span className="dash-progress-legend-item"><span className="dash-progress-dot in-progress" /> In Progress</span>
+          <span className="dash-progress-legend-item"><span className="dash-progress-dot completed" /> Completed</span>
+        </div>
         <div className="dash-progress-strip">
-          {progressMonths.map(({ key, projects: ps }) => {
+          {progressMonths.map(({ key, started, inProgress, completed }) => {
             const [y, m] = key.split('-').map(Number)
             const monthLabel = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short' })
-            const heightPct = maxCompletedInMonth > 0 ? (ps.length / maxCompletedInMonth) * 100 : 0
+            const yrSuffix = `'${String(y).slice(2)}`
+            const h = (n) => maxLifecycleBar > 0 ? (n / maxLifecycleBar) * 100 : 0
+            const drill = (state, list) => {
+              if (!list.length) return
+              setDrillDown({
+                title: `${state} in ${monthLabel} ${yrSuffix} (${list.length})`,
+                projects: list,
+              })
+            }
             return (
-              <button
-                key={key}
-                type="button"
-                className="dash-progress-col"
-                disabled={ps.length === 0}
-                onClick={() => ps.length && setDrillDown({
-                  title: `Completed in ${monthLabel} '${String(y).slice(2)} (${ps.length})`,
-                  projects: ps,
-                })}
-              >
-                <div className="dash-progress-bar-track">
-                  <div className="dash-progress-bar-fill" style={{ height: `${heightPct}%` }} />
+              <div key={key} className="dash-progress-col">
+                <div className="dash-progress-bars">
+                  <button type="button" disabled={started.length === 0}
+                    className="dash-progress-bar-btn"
+                    onClick={() => drill('Started', started)}
+                    title={`${started.length} started`}>
+                    <div className="dash-progress-bar started" style={{ height: `${h(started.length)}%` }} />
+                  </button>
+                  <button type="button" disabled={inProgress.length === 0}
+                    className="dash-progress-bar-btn"
+                    onClick={() => drill('In Progress', inProgress)}
+                    title={`${inProgress.length} in progress`}>
+                    <div className="dash-progress-bar in-progress" style={{ height: `${h(inProgress.length)}%` }} />
+                  </button>
+                  <button type="button" disabled={completed.length === 0}
+                    className="dash-progress-bar-btn"
+                    onClick={() => drill('Completed', completed)}
+                    title={`${completed.length} completed`}>
+                    <div className="dash-progress-bar completed" style={{ height: `${h(completed.length)}%` }} />
+                  </button>
                 </div>
-                <div className="dash-progress-count">{ps.length}</div>
-                <div className="dash-progress-month">
-                  {monthLabel}<span className="yr">'{String(y).slice(2)}</span>
+                <div className="dash-progress-counts">
+                  <span className={started.length === 0 ? 'is-zero' : ''}>{started.length}</span>
+                  <span className={inProgress.length === 0 ? 'is-zero' : ''}>{inProgress.length}</span>
+                  <span className={completed.length === 0 ? 'is-zero' : ''}>{completed.length}</span>
                 </div>
-              </button>
+                <div className="dash-progress-month">{monthLabel}<span className="yr">{yrSuffix}</span></div>
+              </div>
             )
           })}
         </div>
