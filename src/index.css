@@ -352,6 +352,89 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   font-size: 11px !important;
 }
 
+/* ─── Landing page footer — black + gold luxe treatment ─── */
+/* The landing page is intentionally not wrapped in .app-dark, so the
+   sidebar's gold rules don't apply here. Mirror the same warm-black
+   panel + champagne accents directly. Logo carries no drop-shadow or
+   opacity dimming so the wordmark prints at its original colour. */
+.landing-footer-luxe {
+  position: relative;
+  background:
+    radial-gradient(80% 50% at 0% 100%, rgba(212,184,123,0.10), transparent 55%),
+    radial-gradient(60% 40% at 100% 0%, rgba(138,99,40,0.08), transparent 60%),
+    linear-gradient(180deg, #0c0a08 0%, #08070a 100%);
+  color: rgba(255,245,230,0.75);
+  isolation: isolate;
+}
+/* Etched gold thread along the top edge — separator from white above */
+.landing-footer-luxe::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 6%; right: 6%;
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(212,184,123,0.10) 12%,
+    rgba(212,184,123,0.32) 50%,
+    rgba(212,184,123,0.10) 88%,
+    transparent 100%);
+  pointer-events: none;
+}
+
+.landing-footer-logo {
+  /* No drop-shadow, no filter, full opacity */
+  filter: none;
+  opacity: 1;
+}
+
+.landing-footer-eyebrow {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: #caa15a;
+  margin-bottom: 8px;
+}
+
+.landing-footer-email {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff8e7;
+  letter-spacing: 0.005em;
+  transition: color .25s ease, text-shadow .25s ease;
+}
+.landing-footer-email:hover {
+  color: #f5e6c2;
+  text-shadow: 0 0 12px rgba(229,207,148,0.45);
+}
+.landing-footer-mail-icon {
+  color: #e6cf94;
+}
+
+.landing-footer-caption {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  color: rgba(245,230,194,0.55);
+  letter-spacing: 0.01em;
+}
+
+.landing-footer-baseline {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(212,184,123,0.14);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: rgba(245,230,194,0.42);
+}
+
 /* ─── Page title — gold gradient (dark mode only) ─── */
 /* Light mode: the .page-title-gold class is inert — the existing
    Tailwind classes (text-2xl font-bold font-display text-surface-900)

@@ -482,28 +482,26 @@ export default function LandingPage({ isAdmin }) {
       </section>
 
       {/* ─── Footer ──────────────────────────────────────────── */}
-      <footer className="bg-surface-900 text-surface-400">
+      <footer className="landing-footer-luxe">
         <div className="max-w-7xl mx-auto px-6 lg:px-8 py-10">
           <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr_auto] items-center gap-8 sm:gap-12">
-            {/* Union Trading Co. logo */}
+            {/* Union Trading Co. logo — full opacity, no drop-shadow */}
             <div className="flex items-center justify-center sm:justify-start">
               <img
                 src="./union-trading-logo.png"
                 alt="Union Trading Co."
-                className="h-16 sm:h-20 w-auto object-contain opacity-90"
+                className="h-16 sm:h-20 w-auto object-contain landing-footer-logo"
               />
             </div>
 
             {/* Contact block — centered */}
             <div className="flex flex-col items-center text-center">
-              <div className="text-[10px] tracking-[0.35em] uppercase font-semibold text-surface-500 mb-2">
-                Contact Us
-              </div>
+              <div className="landing-footer-eyebrow">Contact Us</div>
               <a
                 href="mailto:ebs@utc.com.kw"
-                className="inline-flex items-center gap-2 text-sm font-medium text-white hover:text-brand-300 transition-colors"
+                className="landing-footer-email"
               >
-                <Mail size={14} className="text-surface-500" />
+                <Mail size={14} className="landing-footer-mail-icon" />
                 ebs@utc.com.kw
               </a>
             </div>
@@ -513,11 +511,11 @@ export default function LandingPage({ isAdmin }) {
               value={content.footer_text}
               isAdmin={isAdmin}
               onSave={v => saveContent('footer_text', v)}
-              className="text-xs text-surface-500 text-center sm:text-right"
+              className="landing-footer-caption text-center sm:text-right"
               as="p"
             />
           </div>
-          <div className="border-t border-surface-800 mt-6 pt-6 text-xs text-center text-surface-600">
+          <div className="landing-footer-baseline">
             Built with care · Kuwait · {new Date().getFullYear()}
           </div>
         </div>
