@@ -2155,7 +2155,11 @@ function GanttChartPage() {
           <div className="flex-1 relative">
             <div className="flex border-b border-surface-100">
               {Object.entries(years).map(([year, ms]) => (
-                <div key={year} className="text-center text-[10px] font-bold text-surface-600 py-1 border-r border-surface-100 bg-surface-50" style={{ width: `${(ms.length / months.length) * 100}%` }}>{year}</div>
+                <div key={year}
+                  className={`text-center text-[10px] font-bold py-1 border-r border-surface-100 bg-surface-50 gantt-year-${Number(year) % 2 === 0 ? 'even' : 'odd'}`}
+                  style={{ width: `${(ms.length / months.length) * 100}%` }}>
+                  {year}
+                </div>
               ))}
             </div>
             <div className="flex">
