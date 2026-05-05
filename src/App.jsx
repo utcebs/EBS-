@@ -379,20 +379,20 @@ async function parseBulkUpload(file) {
 }
 
 // ─── Milestone Bulk Upload (per-project) ────────────────────
-const MILESTONE_HEADERS = ['Key Deliverable','Target Date','Actual Date','Development Status','UAT Status','Dependencies','Owner','Remarks']
+const MILESTONE_HEADERS = ['Key Deliverable','Target Date','Actual Date','Status','Dependencies','Owner','Remarks']
 const MILESTONE_FIELD_MAP = {
   'Key Deliverable':'deliverable','Target Date':'target_date','Actual Date':'actual_date',
-  'Development Status':'development_status','UAT Status':'uat_status','Dependencies':'dependencies',
+  'Status':'development_status','Dependencies':'dependencies',
   'Owner':'owner','Remarks':'remarks',
 }
 async function downloadMilestoneTemplate() {
   const XLSX = await loadXLSX()
-  const sample = ['Sample Deliverable','2026-06-30','','In Progress','Not Started','None','John Doe','On track']
+  const sample = ['Sample Deliverable','2026-06-30','','In Progress','None','John Doe','On track']
   const ws = XLSX.utils.aoa_to_sheet([MILESTONE_HEADERS, sample])
   ws['!cols'] = MILESTONE_HEADERS.map(() => ({ wch: 22 }))
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Milestones')
-  const ref = [['Development Status','UAT Status'],['Not Started','Not Started'],['In Progress','Pending'],['Completed','In Progress'],['Blocked','Passed'],['','Failed']]
+  const ref = [['Status'],['Not Started'],['In Progress'],['Completed'],['Blocked']]
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ref), 'Dropdowns')
   XLSX.writeFile(wb, 'EBS_Milestones_Template.xlsx')
 }
@@ -503,8 +503,7 @@ async function exportAllToExcel(projects) {
     'Key Deliverable': m.deliverable || '',
     'Target Date': m.target_date || '',
     'Actual Date': m.actual_date || '',
-    'Development Status': m.development_status || '',
-    'UAT Status': m.uat_status || '',
+    'Status': m.development_status || '',
     'Owner': m.owner || '',
     'Dependencies': m.dependencies || '',
     'Remarks': m.remarks || '',
@@ -1542,19 +1541,15 @@ function ProjectDetail() {
     {tab === 'dashboard' && (
       <div>
         {/* Summary cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl p-4 border border-surface-200">
             <p className="text-xs text-surface-400 mb-1">Total Milestones</p>
             <p className="text-2xl font-bold font-display text-surface-900">{milestones.length}</p>
           </div>
           <div className="bg-white rounded-xl p-4 border border-surface-200">
-            <p className="text-xs text-surface-400 mb-1">Dev Completed</p>
+            <p className="text-xs text-surface-400 mb-1">Completed</p>
             <p className="text-2xl font-bold font-display text-emerald-600">{completedMs}</p>
             <ProgressBar value={String(msProgress)} className="mt-2" />
-          </div>
-          <div className="bg-white rounded-xl p-4 border border-surface-200">
-            <p className="text-xs text-surface-400 mb-1">UAT Passed</p>
-            <p className="text-2xl font-bold font-display text-blue-600">{milestones.filter(m => m.uat_status === 'Passed').length}</p>
           </div>
           <div className="bg-white rounded-xl p-4 border border-surface-200">
             <p className="text-xs text-surface-400 mb-1">Open Risks</p>
@@ -1564,24 +1559,14 @@ function ProjectDetail() {
         </div>
 
         {milestones.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* Dev Status Pie */}
-            <div className="bg-white rounded-2xl p-6 border border-surface-200">
-              <h3 className="text-sm font-semibold text-surface-700 mb-1">Development Status</h3>
+          <div className="mb-6">
+            {/* Status Pie — single chart now that UAT is hidden site-wide */}
+            <div className="bg-white rounded-2xl p-6 border border-surface-200 max-w-2xl mx-auto">
+              <h3 className="text-sm font-semibold text-surface-700 mb-1">Status</h3>
               <p className="text-xs text-surface-400 mb-3">Click a segment to see milestones</p>
               <Suspense fallback={<ChartFallback height={220} />}>
                 <ProjectDetailChartsLazy kind="dev" data={devStatusData} colors={DEV_STATUS_COLORS}
-                  onDrill={(name) => { const filtered = milestones.filter(m => m.development_status === name); setDashDrill({ title: `Dev: ${name} (${filtered.length})`, items: filtered, type: 'milestones' }) }} />
-              </Suspense>
-            </div>
-
-            {/* UAT Status Pie */}
-            <div className="bg-white rounded-2xl p-6 border border-surface-200">
-              <h3 className="text-sm font-semibold text-surface-700 mb-1">UAT Status</h3>
-              <p className="text-xs text-surface-400 mb-3">Click a segment to see milestones</p>
-              <Suspense fallback={<ChartFallback height={220} />}>
-                <ProjectDetailChartsLazy kind="uat" data={uatStatusData} colors={UAT_STATUS_COLORS}
-                  onDrill={(name) => { const filtered = milestones.filter(m => m.uat_status === name); setDashDrill({ title: `UAT: ${name} (${filtered.length})`, items: filtered, type: 'milestones' }) }} />
+                  onDrill={(name) => { const filtered = milestones.filter(m => m.development_status === name); setDashDrill({ title: `Status: ${name} (${filtered.length})`, items: filtered, type: 'milestones' }) }} />
               </Suspense>
             </div>
           </div>
@@ -1741,7 +1726,6 @@ function ProjectDetail() {
                     {m.owner && <p className="text-xs text-surface-400">Owner: {m.owner}</p>}
                   </div>
                   <DevStatusBadge status={m.development_status} />
-                  <UatStatusBadge status={m.uat_status} />
                 </div>
               ))}
             </div>
@@ -1774,7 +1758,7 @@ function ProjectDetail() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead><tr className="bg-surface-50 border-b border-surface-200">
-              {['#', 'Key Deliverable', 'Target Date', 'Actual Date', 'Dev Status', 'UAT Status', 'Dependencies', 'Owner', 'Remarks', isAdmin && 'Actions'].filter(Boolean).map(h => (
+              {['#', 'Key Deliverable', 'Target Date', 'Actual Date', 'Status', 'Dependencies', 'Owner', 'Remarks', isAdmin && 'Actions'].filter(Boolean).map(h => (
                 <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-surface-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}
             </tr></thead>
@@ -1786,7 +1770,6 @@ function ProjectDetail() {
                   <td className="px-4 py-3 text-sm text-surface-600 whitespace-nowrap">{m.target_date || '—'}</td>
                   <td className="px-4 py-3 text-sm text-surface-600 whitespace-nowrap">{m.actual_date || '—'}</td>
                   <td className="px-4 py-3"><DevStatusBadge status={m.development_status} /></td>
-                  <td className="px-4 py-3"><UatStatusBadge status={m.uat_status} /></td>
                   <td className="px-4 py-3 text-xs text-surface-500 max-w-[200px]"><p className="truncate">{m.dependencies || '—'}</p></td>
                   <td className="px-4 py-3 text-sm text-surface-600 whitespace-nowrap">{m.owner || '—'}</td>
                   <td className="px-4 py-3 text-xs text-surface-500 max-w-[200px]"><p className="truncate">{m.remarks || '—'}</p></td>
@@ -1894,7 +1877,6 @@ function ProjectDetail() {
               </div>
               <div className="flex items-center gap-2 ml-4">
                 <DevStatusBadge status={m.development_status} />
-                <UatStatusBadge status={m.uat_status} />
               </div>
             </div>
           ))}
@@ -1958,10 +1940,7 @@ function MilestoneFormModal({ open, milestone, onClose, onSave }) {
         <FormField label="Target Date"><input className={inputCls} type="date" value={form.target_date || ''} onChange={e => set('target_date', e.target.value)} /></FormField>
         <FormField label="Actual Date"><input className={inputCls} type="date" value={form.actual_date || ''} onChange={e => set('actual_date', e.target.value)} /></FormField>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <FormField label="Development Status"><select className={selectCls} value={form.development_status || ''} onChange={e => set('development_status', e.target.value)}>{DEV_STATUSES.map(s => <option key={s}>{s}</option>)}</select></FormField>
-        <FormField label="UAT Status"><select className={selectCls} value={form.uat_status || ''} onChange={e => set('uat_status', e.target.value)}>{UAT_STATUSES.map(s => <option key={s}>{s}</option>)}</select></FormField>
-      </div>
+      <FormField label="Status"><select className={selectCls} value={form.development_status || ''} onChange={e => set('development_status', e.target.value)}>{DEV_STATUSES.map(s => <option key={s}>{s}</option>)}</select></FormField>
       <FormField label="Owner"><input className={inputCls} value={form.owner || ''} onChange={e => set('owner', e.target.value)} /></FormField>
       <FormField label="Dependencies"><textarea className={textareaCls} rows={2} value={form.dependencies || ''} onChange={e => set('dependencies', e.target.value)} /></FormField>
       <FormField label="Remarks"><textarea className={textareaCls} rows={2} value={form.remarks || ''} onChange={e => set('remarks', e.target.value)} /></FormField>
