@@ -283,9 +283,19 @@ function ProgressBar({ value, className = '', height = 'h-2' }) {
 }
 
 function Modal({ open, onClose, title, children, wide }) {
+  // Close on ESC. Backdrop click is intentionally NOT a close path —
+  // a text-selection drag that starts inside an input and ends outside
+  // the panel would otherwise close the modal and discard the user's
+  // in-progress edits. X button + ESC are the only close paths.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
   if (!open) return null
-  return <div className="fixed inset-0 z-50 flex items-start justify-center pt-[5vh] modal-backdrop" onClick={onClose}>
-    <div className={`bg-white rounded-2xl shadow-2xl ${wide ? 'max-w-4xl' : 'max-w-2xl'} w-full mx-4 max-h-[85vh] flex flex-col animate-fade-in`} onClick={e => e.stopPropagation()}>
+  return <div className="fixed inset-0 z-50 flex items-start justify-center pt-[5vh] modal-backdrop">
+    <div className={`bg-white rounded-2xl shadow-2xl ${wide ? 'max-w-4xl' : 'max-w-2xl'} w-full mx-4 max-h-[85vh] flex flex-col animate-fade-in`}>
       <div className="flex items-center justify-between px-6 py-4 border-b border-surface-200">
         <h2 className="text-lg font-semibold font-display text-surface-800">{title}</h2>
         <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-surface-600 transition-colors"><X size={18} /></button>
@@ -296,9 +306,16 @@ function Modal({ open, onClose, title, children, wide }) {
 }
 
 function ConfirmDialog({ open, onClose, onConfirm, title, message }) {
+  // Same close-path rules as Modal — Cancel button or ESC, never backdrop.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
   if (!open) return null
-  return <div className="fixed inset-0 z-[60] flex items-center justify-center modal-backdrop" onClick={onClose}>
-    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 animate-fade-in" onClick={e => e.stopPropagation()}>
+  return <div className="fixed inset-0 z-[60] flex items-center justify-center modal-backdrop">
+    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 animate-fade-in">
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2 bg-red-50 rounded-xl"><AlertTriangle className="text-red-500" size={20} /></div>
         <h3 className="text-lg font-semibold text-surface-800">{title}</h3>
