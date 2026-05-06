@@ -615,3 +615,115 @@ Was pending-only. Now has a chip filter row at the top: **Pending** (default) / 
 
 ### Team Overview radar grid (commit `c0144b0`)
 Per-employee radar's web grid was `rgba(148,163,184,0.15)` — slate at 15% — barely visible on the black canvas. Switched to theme-aware values inline: dark = `rgba(255,255,255,0.28)`, light = `rgba(26,22,18,0.18)`. Same treatment for `angleLines` and `pointLabels.color`.
+
+---
+
+## 18. Early May — premium gold rollout + dashboard polish + Gantt fixes
+
+A continuation of §17's "GOLD THEME OVERLAY". Extends the gold treatment from the EBS tracker into the React app's sidebar, page logos, page titles, landing footer, and Gantt year bands; ships the new "Progress So Far" lifecycle visual; fixes a stale-Gantt bug + an end-of-month bar truncation bug. Range: `acfa52c` → `ed390e6`.
+
+### Premium gold theme — React app
+
+- **Sidebar luxe** (`.sidebar-luxe` block in `src/index.css`): warm-black panel `#0c0a08 → #070608` + radial gold glow top-left + warm-shadow bottom-right + 6%-opacity SVG film-grain overlay + etched gold right-edge hairline that fades top/bottom. Brand title "EBS Projects" in Instrument Serif with white→champagne→gold text-fill gradient. Active route gets a 2px gold rail with double-layered glow + warm gradient bg fading to right. Theme toggle knob is gold; admin shield avatar is gold gradient. Tools section gets gold hairline divider + champagne 0.32em-tracked label. Admin pill is embossed champagne gradient with deep-black text.
+  - **Pitfall**: don't add `position: relative` to `.sidebar-luxe`. The `fixed` Tailwind class would be overridden by user CSS in the cascade, the sidebar would reserve its 256px slot in the parent flex layout, and a white gap would appear on every page. `position: fixed` already creates a containing block for `::before/::after`.
+
+- **PageLogo component** (in `src/App.jsx` near utility components, used on Dashboard/ProjectTracker/GanttChartPage): renders BOTH `ebs-logo.png` (color, light) and `ebs-logo-white.png` simultaneously; CSS class swap (`.page-logo-light` hidden under `.app-dark`, `.page-logo-dark` hidden by default) picks which is visible. Size `h-20`. Avoids prop-drilling theme state.
+
+- **Page titles** (`.page-title-gold` class scoped to `.app-dark`): champagne gradient text fill (`#f5e6c2 → #caa15a`) in Instrument Serif. "Projects Dashboard" / "Project Tracker" / "Gantt Chart" pick this up only in dark mode; light mode keeps the surface-900 default. The Dashboard header was also renamed "Portfolio Dashboard" → "Projects Dashboard".
+
+- **Landing footer** (`.landing-footer-luxe` block): warm-black panel with hairline gold thread along the top edge, champagne CONTACT US eyebrow at 0.35em tracked caps, gold mail icon, email link hover lifts to lightest champagne with text-shadow halo. Union Trading logo at full opacity with `filter: none` (per user — was previously `opacity-90` and considered a "shade"). Landing page is intentionally NOT wrapped in `.app-dark`, so this scope class works independently.
+
+### Premium gold theme — EBS tracker
+
+Extension inside the existing GOLD THEME OVERLAY block at the bottom of `ebs-tracker/css/style.css`, scoped `body:not(.light-mode)` so light mode is untouched:
+- Sidebar gets the full luxe treatment (panel gradient + radial glows + film grain + right-edge gold hairline + gold dividers + 2px active-rail glow + champagne user-name etc.).
+- Brand wordmark "EBS Tracker": solid champagne `#e6cf94` (NOT a gradient text-clip). The earlier gradient + `-webkit-background-clip: text` was rendering as a solid gold rectangle in some browsers — explicit `background: none` + `color: #e6cf94` is bulletproof.
+- `.btn-primary` switched from white pill to champagne gold gradient (`#f5e6c2 → #e6cf94 → #caa15a`) with deep-black `#1a1208` text. Light mode keeps its existing brown gradient.
+- Login: "Enter the Arena" → "Let's Go". The `⚔️` swords emoji is gone.
+
+### Blue PWA splash → warm near-black
+
+Navy `#080d1a` (and React-app brand `#4263eb`) was leaking into the page-transition flash between React app → EBS tracker. Killed at every source:
+- `public/manifest.json`: `background_color` + `theme_color` → `#0c0a08`
+- `ebs-tracker/manifest.json`: same
+- React `index.html` `<meta theme-color>` → `#0c0a08`
+- All six tracker HTML files' `<meta theme-color>` → `#0c0a08`
+- `.auth-check` overlay in `ebs-tracker/index.html`: black bg + champagne spinner ring (was indigo `#6366f1`)
+- Belt-and-braces inline `<style>html,body{background:#0c0a08}` in `index.html` so the first paint is never white.
+
+### Gantt — two fixes
+
+- **End-of-month bar truncation**: `parseDate('2026-03')` returned Mar 1, so a project ending in March had its bar visually end at the *start* of the March column (looked like "ends in February"). Split the parser: `parseStartDate('YYYY-MM')` returns Mar 1 (bar opens at left edge of column), `parseEndDate('YYYY-MM')` returns Mar 31 via `new Date(y, m, 0)` (bar fills the column). ISO end dates with a day component (`'YYYY-MM-DD'`) are still honoured as-given.
+- **Year banding**: month labels and the year header bar color-split by year parity. Even years (2026) = amber-800 (light) / champagne `#e6cf94` + halo (dark). Odd years (2025) = sky-700 / sky-300. Both at semibold + 0.06em tracking — colour alone differentiates so neither reads as demoted. Classes: `.gantt-month-even/odd`, `.gantt-year-even/odd`.
+
+### ProjectDetail cache invalidation (Gantt staleness fix)
+
+Editing a project from `/projects/:id` only refreshed the page's local `project` state via `fetchAll()`. The **global** `ProjectsProvider` cache used by Dashboard / ProjectTracker / GanttChartPage was never invalidated, so navigating to those pages after an edit showed pre-edit data (Gantt bar end didn't move). Fix: `ProjectDetail` now pulls `refreshProjects` from `useProjects()` and calls it after `saveProject` succeeds. The Tracker page's edit path was already doing this; ProjectDetail was the gap.
+
+**Rule**: any component that writes data also surfaced through a global context cache MUST call the cache's refresh fn after the write — local refresh alone is insufficient.
+
+### Dashboard — "Progress So Far" lifecycle visual
+
+New editorial section above "Starting This Month" (`.dash-progress-section`). Three side-by-side bars per month classifying each project's lifecycle:
+- `started` — `start_date === month`
+- `inProgress` — `start_date < month && (no end_date || month < end_date)`
+- `completed` — `end_date === month`
+
+A 1-month project (start === end) counts as both started AND completed (no in-progress middle). `monthOf()` helper normalises `YYYY-MM` and `YYYY-MM-DD` so string comparisons work for either format.
+
+**Palette**: sky → amber → emerald (matches the existing dashboard KPI accent vocabulary). Each bar is individually clickable and drills into that state's projects via the existing `setDrillDown` modal. Counts directly under each bar; faded if zero.
+
+**Headline**: "{N} in motion" where N = `currentMonth.started.length + currentMonth.inProgress.length`. This was initially the strip-wide unique-project count which read confusingly large (e.g. 33); switched to current-month sum so it tracks active work *this* month.
+
+Reuses `.dash-month-eyebrow / -title / -sub / .yr` for typography parity with the "Starting This Month" closer.
+
+### Landing page polish
+
+- **Team tree connector fix**: the horizontal trunk used `max-w-xl` (576 px) while the team grid lives inside `max-w-5xl` (1024 px). At desktop widths the outer cards' vertical drops pointed upward into empty space. Fix: trunk moved INSIDE the grid as an absolutely-positioned `::before`-style div sized via `calc((100% - 96px) / 6)` (3-col desktop, gap-12) / `calc((100% - 32px) / 4)` (2-col mobile, gap-8). Special case: 2 members on desktop uses `right: 50%` so the trunk runs cell-1-centre → cell-2-centre. Per-cell drops gated to `index < 3` so trees with 4+ members don't dangle on row 2.
+- **Achievements section**: dropped the "ACHIEVEMENTS" pill eyebrow, renamed "What we've delivered" → **"Moonshot Projects"**. Tile 1 keeps its DB icon; tiles 2 + 3 force-render `🛒` (e-commerce) and `🛡️` (IT security) regardless of past admin edits. Implemented via an `ICON_BY_INDEX` override at render time. Admin edits to value/label still work.
+- **Employee Role(s)** chips: landing team-card expand now shows `member.employee_roles[]` chips above the bio.
+
+### UAT Status — hidden across the React app
+
+Every UI surface that displayed UAT Status data was removed (KPI card "UAT Passed", pie chart "UAT Status", milestones table column, drill-down badge, form modal input, bulk-upload template column, Excel export column). The DB column `milestones.uat_status` stays untouched for future revival. The remaining "Development Status" pie was renamed → just "Status". Companion renames: KPI "Dev Completed" → "Completed", table column "Dev Status" → "Status", form label "Development Status" → "Status".
+
+The dead constants `UAT_STATUSES`, `UAT_STATUS_COLORS`, `UatStatusBadge` are kept in `App.jsx` so reverting is a one-liner if needed.
+
+(Footnote: I initially over-interpreted "hide UAT anywhere on the website" and removed both pie charts when the user wanted only the per-row table data hidden. Auto-memory feedback `feedback_ui_removal_scope.md` saved to avoid repeating: when "hide X" includes a broad qualifier like "anywhere", default to the narrowest plausible reading and confirm before nuking aggregate visualisations.)
+
+### ProjectDetailCharts.jsx (new lazy chunk)
+
+When `DashboardCharts` was extracted in §17, the recharts top-level imports were dropped from `App.jsx` — but `ProjectDetail` still used `ResponsiveContainer / PieChart / BarChart / etc.` and threw `ReferenceError: ResponsiveContainer is not defined` on render. Fix: new `src/components/ProjectDetailCharts.jsx` exports `DevStatusPie`, `UatStatusPie`, `RiskBar`. A single `React.lazy` import dispatches to the right one via a `kind` prop. Bundle: ~1.4 KB extra chunk; recharts vendor only ships when Dashboard OR ProjectDetail mounts.
+
+### Files touched
+
+- React: `src/App.jsx`, `src/index.css`, `src/components/LandingPage.jsx`, `src/components/ProjectDetailCharts.jsx` (new)
+- Tracker: `ebs-tracker/css/style.css`, `ebs-tracker/index.html`, `ebs-tracker/manifest.json`, all six tracker HTML files (theme-color)
+- Root: `index.html` (theme-color, inline body bg), `public/manifest.json`
+- No schema changes.
+
+### Patterns worth remembering
+
+- **`.sidebar-luxe` / `.landing-footer-luxe` / `.page-title-gold`** are the new gold-theme scope classes on the React side. Add to the existing block in `src/index.css` rather than scattering rules — keeps `git revert` of the gold theme clean.
+- **PageLogo CSS swap** — render both colour and white logo `<img>` tags simultaneously; CSS based on `.app-dark` ancestor picks which is visible. Avoids prop-drilling.
+- **`-webkit-background-clip: text` is fragile** — when used with `background: linear-gradient`, some browsers / specificity cases render the span as a solid rectangle. If the gradient is decorative (not load-bearing for the design), prefer `color: #hex` on a solid hue. Reserve gradient text for hero-level emphasis.
+- **`position: fixed` + pseudo-elements** — `fixed` already creates a containing block for absolutely-positioned children. Don't add `position: relative` to override or "anchor" — user CSS comes after Tailwind in the cascade and `relative` will override `fixed`, sending the element back into normal document flow.
+- **`calc()` for layout-aware positioning** — when an element needs to span between specific fractional points of a flex/grid parent, `calc((100% - gap) / N)` works precisely against `grid-template-columns: 1fr ... 1fr`. The team tree trunk uses this.
+- **PWA splash colour comes from `manifest.json` `background_color`** — not just `theme_color`. Both must be set for a clean cross-app navigation flash.
+- **Year-parity timeline banding** — `year % 2` paired with warm/cool palettes (gold vs sky) gives at-a-glance year differentiation without a heavy legend.
+- **Cache invalidation rule**: any write through `supabase.from('table').update()` from a component that uses a global context cache MUST call the cache's `refresh*()` fn afterwards. ProjectDetail's gap broke Gantt freshness.
+
+### Verification additions (run in incognito after deploy)
+
+1. ✅ Dashboard / Tracker / Gantt: header `<h1>` renders in champagne gradient (dark mode) with EBS logo above; light mode keeps the original surface-900 black title.
+2. ✅ React sidebar: warm-black panel, gold right-edge hairline, active route shows gold left rail + glow. Theme toggle knob and admin shield are gold.
+3. ✅ EBS tracker sidebar (dark mode only): same treatment. Brand wordmark "EBS Tracker" is solid champagne — no gold rectangle behind the letters.
+4. ✅ React app → EBS tracker navigation: no blue flash; warm-black throughout the transition. Login button reads "Let's Go" with gold gradient.
+5. ✅ Gantt: a project with `end_date='YYYY-MM'` has its bar fill the entire end-month column. Year header + month labels color-split (gold vs sky) with `text-shadow` halo in dark mode.
+6. ✅ Edit a project from `/projects/:id` (status + end_date) → navigate to Gantt → bar updated immediately without a reload.
+7. ✅ Dashboard "Progress So Far": 3 bars per month in sky/amber/emerald. Headline "{N} in motion" reflects current-month started + in-progress only. Each bar drillable.
+8. ✅ Landing team tree: trunk meets every outer card's vertical drop on any viewport. Achievements section reads "Moonshot Projects"; tiles show 🛒 + 🛡️.
+9. ✅ Landing footer: warm-black with gold trim; logo at full opacity, no drop-shadow.
+10. ✅ Milestone tab: no UAT Status anywhere in the visible UI; pie chart reads "Status".
+
+_Last updated: 2026-05-06 — early May polish session._
