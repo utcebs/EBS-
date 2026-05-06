@@ -286,20 +286,19 @@ function MultiSelectDropdown({ options, selected, onChange, allLabel = 'All' }) 
         <ChevronDown size={14} className={`shrink-0 text-surface-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute top-full mt-1 left-0 min-w-[180px] z-30 bg-white rounded-lg shadow-lg border border-surface-200 py-1 max-h-72 overflow-y-auto">
+        <div className="multi-select-popover">
           {selected.length > 0 && (
             <button type="button" onClick={() => onChange([])}
-              className="w-full px-3 py-2 text-left text-xs font-medium text-brand-600 hover:bg-surface-50 border-b border-surface-100">
+              className="multi-select-clear">
               Clear all
             </button>
           )}
           {options.map(opt => {
             const checked = selected.includes(opt)
             return (
-              <label key={opt} className="flex items-center gap-2 px-3 py-2 hover:bg-surface-50 cursor-pointer text-sm select-none">
-                <input type="checkbox" checked={checked} onChange={() => toggle(opt)}
-                  className="w-4 h-4 text-brand-600 rounded border-surface-300 focus:ring-brand-500 cursor-pointer" />
-                <span className="text-surface-800">{opt}</span>
+              <label key={opt} className="multi-select-item">
+                <input type="checkbox" checked={checked} onChange={() => toggle(opt)} />
+                <span>{opt}</span>
               </label>
             )
           })}

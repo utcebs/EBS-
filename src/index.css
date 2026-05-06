@@ -137,6 +137,82 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   body { overscroll-behavior: none; }
 }
 
+/* ─── Multi-select dropdown popover ─── */
+/* Used by ProjectTracker's Status + Priority filters. Owns its own
+   styling explicitly because `.app-dark .bg-white` reduces background
+   opacity to 4% across the app (good for cards, terrible for popovers
+   that need clear contrast against the page below). */
+.multi-select-popover {
+  position: absolute !important;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 200px;
+  z-index: 40;
+  padding: 4px 0;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid rgb(226, 232, 240);
+  box-shadow: 0 12px 28px -10px rgba(15, 23, 42, 0.18);
+  max-height: 280px;
+  overflow-y: auto;
+  /* The flex parent gap + absolute don't always cooperate cleanly — kill
+     any inherited flex/grid sizing on the popover itself. */
+  display: block;
+}
+.app-dark .multi-select-popover {
+  background: #15151a !important;
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.85);
+}
+
+.multi-select-clear {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(79, 70, 229); /* indigo-600 */
+  border: 0;
+  border-bottom: 1px solid rgb(241, 245, 249);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color .15s ease;
+}
+.multi-select-clear:hover { background: rgb(248, 250, 252); }
+.app-dark .multi-select-clear {
+  color: #e6cf94;
+  border-bottom-color: rgba(212, 184, 123, 0.16);
+}
+.app-dark .multi-select-clear:hover { background: rgba(212, 184, 123, 0.08); }
+
+.multi-select-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: rgb(30, 41, 59);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color .15s ease;
+}
+.multi-select-item:hover { background: rgb(248, 250, 252); }
+.multi-select-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: rgb(79, 70, 229);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.app-dark .multi-select-item { color: rgba(255, 245, 230, 0.88); }
+.app-dark .multi-select-item:hover { background: rgba(212, 184, 123, 0.10); }
+.app-dark .multi-select-item input[type="checkbox"] { accent-color: #caa15a; }
+
 /* ─── Page logo (top-of-page brand mark) ─── */
 /* Default = light theme: show colour logo, hide the white-only variant */
 .page-logo-dark { display: none; }
