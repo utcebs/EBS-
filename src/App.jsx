@@ -949,7 +949,7 @@ function Dashboard() {
   const monthOf = (d) => (d ? d.slice(0, 7) : null)
   const projectsWithStart = projects.filter(p => p.start_date)
   let progressMonths = []
-  let projectsInStripCount = 0
+  let inMotionThisMonth = 0
   let maxLifecycleBar = 0
   if (projectsWithStart.length > 0) {
     const earliestStart = monthOf(projectsWithStart.map(p => p.start_date).sort()[0])
@@ -974,13 +974,14 @@ function Dashboard() {
     progressMonths.forEach(d => {
       maxLifecycleBar = Math.max(maxLifecycleBar, d.started.length, d.inProgress.length, d.completed.length)
     })
-    const ids = new Set()
-    progressMonths.forEach(({ started, inProgress, completed }) => {
-      started.forEach(p => ids.add(p.id))
-      inProgress.forEach(p => ids.add(p.id))
-      completed.forEach(p => ids.add(p.id))
-    })
-    projectsInStripCount = ids.size
+    // "In motion" headline counts projects active in the CURRENT month —
+    // started + in-progress (not completed). Started and inProgress are
+    // mutually exclusive (start_date === k vs start_date < k), so a simple
+    // sum has no double-count.
+    const currentMonth = progressMonths.find(m => m.key === yearMonthKey)
+    if (currentMonth) {
+      inMotionThisMonth = currentMonth.started.length + currentMonth.inProgress.length
+    }
   }
 
   // Clickable pie chart handler
@@ -1073,7 +1074,7 @@ function Dashboard() {
     {progressMonths.length > 0 && (
       <section className="dash-progress-section">
         <div className="dash-month-eyebrow">Progress So Far</div>
-        <h2 className="dash-month-title">{projectsInStripCount} <span className="yr">in motion</span></h2>
+        <h2 className="dash-month-title">{inMotionThisMonth} <span className="yr">in motion</span></h2>
         <p className="dash-month-sub">The lifecycle of every project, month by month. Click a bar to drill in.</p>
         <div className="dash-progress-legend">
           <span className="dash-progress-legend-item"><span className="dash-progress-dot started" /> Started</span>
