@@ -251,6 +251,64 @@ function PageLogo() {
   )
 }
 
+// Multi-select dropdown with checkboxes. Used by ProjectTracker for the
+// Status + Priority filters so admins can layer multiple values
+// simultaneously. Closes on outside click; ESC clears the popover but
+// keeps the selection (clear via the "Clear all" link inside).
+function MultiSelectDropdown({ options, selected, onChange, allLabel = 'All' }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  const toggle = (opt) => {
+    if (selected.includes(opt)) onChange(selected.filter(s => s !== opt))
+    else onChange([...selected, opt])
+  }
+  const label = selected.length === 0
+    ? allLabel
+    : selected.length === 1
+      ? selected[0]
+      : `${selected.length} selected`
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="px-3 py-2 rounded-lg border border-surface-200 bg-white text-sm text-surface-800 hover:border-surface-300 focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-400 transition-colors w-auto min-w-[160px] flex items-center justify-between gap-2 text-left">
+        <span className="truncate">{label}</span>
+        <ChevronDown size={14} className={`shrink-0 text-surface-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 min-w-[180px] z-30 bg-white rounded-lg shadow-lg border border-surface-200 py-1 max-h-72 overflow-y-auto">
+          {selected.length > 0 && (
+            <button type="button" onClick={() => onChange([])}
+              className="w-full px-3 py-2 text-left text-xs font-medium text-brand-600 hover:bg-surface-50 border-b border-surface-100">
+              Clear all
+            </button>
+          )}
+          {options.map(opt => {
+            const checked = selected.includes(opt)
+            return (
+              <label key={opt} className="flex items-center gap-2 px-3 py-2 hover:bg-surface-50 cursor-pointer text-sm select-none">
+                <input type="checkbox" checked={checked} onChange={() => toggle(opt)}
+                  className="w-4 h-4 text-brand-600 rounded border-surface-300 focus:ring-brand-500 cursor-pointer" />
+                <span className="text-surface-800">{opt}</span>
+              </label>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const inputCls = 'w-full px-3 py-2 rounded-lg border border-surface-200 bg-white text-sm text-surface-800 focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-400 transition-colors'
 const selectCls = inputCls
 const textareaCls = inputCls + ' resize-none'
@@ -1186,18 +1244,18 @@ function ProjectTracker() {
   const [showForm, setShowForm] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterPriority, setFilterPriority] = useState('')
+  const [filterStatuses, setFilterStatuses] = useState([])
+  const [filterPriorities, setFilterPriorities] = useState([])
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState('')
   const fileInputRef = useRef(null)
 
   const filtered = useMemo(() => projects.filter(p => {
     if (searchTerm && !p.project_name.toLowerCase().includes(searchTerm.toLowerCase()) && !(p.business_owner || '').toLowerCase().includes(searchTerm.toLowerCase())) return false
-    if (filterStatus && p.status !== filterStatus) return false
-    if (filterPriority && p.priority !== filterPriority) return false
+    if (filterStatuses.length > 0 && !filterStatuses.includes(p.status)) return false
+    if (filterPriorities.length > 0 && !filterPriorities.includes(p.priority)) return false
     return true
-  }), [projects, searchTerm, filterStatus, filterPriority])
+  }), [projects, searchTerm, filterStatuses, filterPriorities])
 
   const handleSave = async (data) => {
     try {
@@ -1294,12 +1352,8 @@ function ProjectTracker() {
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
         <input type="text" placeholder="Search projects or owners..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className={`${inputCls} pl-9`} />
       </div>
-      <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={`${selectCls} w-auto min-w-[140px]`}>
-        <option value="">All Statuses</option>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-      </select>
-      <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} className={`${selectCls} w-auto min-w-[140px]`}>
-        <option value="">All Priorities</option>{PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-      </select>
+      <MultiSelectDropdown options={STATUSES} selected={filterStatuses} onChange={setFilterStatuses} allLabel="All Statuses" />
+      <MultiSelectDropdown options={PRIORITIES} selected={filterPriorities} onChange={setFilterPriorities} allLabel="All Priorities" />
     </div>
 
     <div className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden">
